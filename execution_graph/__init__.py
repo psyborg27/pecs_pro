@@ -1,0 +1,3 @@
+"""
+Execution-topological graph infrastructure.
+"""

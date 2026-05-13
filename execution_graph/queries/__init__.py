@@ -1,0 +1,3 @@
+"""
+Topology-aware continuity queries.
+"""

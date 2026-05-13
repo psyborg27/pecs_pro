@@ -1,0 +1,3 @@
+"""
+Compact continuity reconstruction infrastructure.
+"""

@@ -1,0 +1,3 @@
+"""
+Signal-slot continuity reconstruction.
+"""

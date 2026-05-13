@@ -1,0 +1,3 @@
+"""
+Topology continuity scoring infrastructure.
+"""
