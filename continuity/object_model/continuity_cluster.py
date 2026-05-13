@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
 
-@dataclass(slots=True)
+@dataclass
 class ContinuityCluster:
     """
     Duplicate evolution and continuity drift cluster.

@@ -15,7 +15,7 @@ from ...topology.retrieval.topology_retriever import (
 )
 
 
-@dataclass(slots=True)
+@dataclass
 class IncrementalTopologyUpdater:
     """
     Consolidated incremental continuity updater.

@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Dict, List
 
 
-@dataclass(slots=True)
+@dataclass
 class TopologySnapshot:
     """
     Runtime topology snapshot.

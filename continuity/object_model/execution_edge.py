@@ -20,7 +20,7 @@ class ExecutionEdgeType(str, Enum):
     EXECUTION_CHAIN = "execution_chain"
 
 
-@dataclass(slots=True)
+@dataclass
 class ExecutionEdge:
     """
     Runtime execution continuity relationship.

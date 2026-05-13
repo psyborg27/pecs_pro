@@ -46,7 +46,7 @@ from .topology.compaction.compact_context_builder import (
 )
 
 
-@dataclass(slots=True)
+@dataclass
 class PECSProRuntime:
     """
     Canonical deterministic PECS-PRO v2 runtime.
@@ -93,12 +93,10 @@ class PECSProRuntime:
             scoring_engine=scoring_engine,
         )
 
-        incremental_updater = (
-            IncrementalTopologyUpdater(
-                graph_index=graph_index,
-                locality_index=locality_index,
-                topology_retriever=topology_retriever,
-            )
+        incremental_updater = IncrementalTopologyUpdater(
+            graph_index=graph_index,
+            locality_index=locality_index,
+            topology_retriever=topology_retriever,
         )
 
         runtime_session = WorkspaceRuntimeSession(
@@ -147,7 +145,4 @@ def bootstrap_pecs_pro(
 
 if __name__ == "__main__":
     runtime = bootstrap_pecs_pro(".")
-
-    print(
-        "PECS-PRO v2 initialized successfully."
-    )
+    print("PECS-PRO v2 initialized successfully.")

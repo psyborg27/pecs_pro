@@ -18,7 +18,7 @@ class DispatchEdgeType(str, Enum):
     EXECUTION_DISPATCH = "execution_dispatch"
 
 
-@dataclass(slots=True)
+@dataclass
 class DispatchEdge:
     """
     Runtime dispatch topology edge.

@@ -17,7 +17,7 @@ class SubprocessEdgeType(str, Enum):
     SUBPROCESS_DELEGATION = "subprocess_delegation"
 
 
-@dataclass(slots=True)
+@dataclass
 class SubprocessEdge:
     """
     Runtime subprocess topology edge.

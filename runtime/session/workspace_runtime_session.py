@@ -21,7 +21,7 @@ from ...topology.incremental.incremental_topology_updater import (
 )
 
 
-@dataclass(slots=True)
+@dataclass
 class WorkspaceRuntimeSession:
     """
     Consolidated live workspace continuity session.

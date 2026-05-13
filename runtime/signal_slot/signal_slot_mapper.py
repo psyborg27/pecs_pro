@@ -6,11 +6,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List
 
-
 SIGNAL_CONNECT_PATTERN = "connect"
 
 
-@dataclass(slots=True)
+@dataclass
 class SignalSlotMapper:
     """
     Signal-slot continuity reconstruction mapper.
@@ -19,9 +18,7 @@ class SignalSlotMapper:
     continuity topology.
     """
 
-    signal_slot_connections: Dict[str, List[str]] = field(
-        default_factory=dict
-    )
+    signal_slot_connections: Dict[str, List[str]] = field(default_factory=dict)
 
     def scan_file(self, file_path: Path) -> None:
         try:
@@ -48,17 +45,30 @@ class SignalSlotMapper:
             if isinstance(func, ast.Attribute):
                 if func.attr == SIGNAL_CONNECT_PATTERN:
                     discovered.append(
-                        f"{file_path.name}:{node.lineno}"
+                        self._build_anchor(
+                            file_path=file_path,
+                            segment="signal",
+                            detail="connect",
+                        )
                     )
 
         if discovered:
-            self.signal_slot_connections[
-                str(file_path)
-            ] = discovered
+            self.signal_slot_connections[str(file_path)] = discovered
+
+    def _path_hint(self, file_path: Path) -> str:
+        parent = file_path.parent.name
+        stem = file_path.stem
+        return ".".join(part for part in (parent, stem) if part).lower()
+
+    def _build_anchor(
+        self,
+        file_path: Path,
+        segment: str,
+        detail: str,
+    ) -> str:
+        return f"PECS_ID:{segment}.{self._path_hint(file_path)}.{detail}"
 
     def to_dict(self) -> Dict[str, object]:
         return {
-            "signal_slot_connections": (
-                self.signal_slot_connections
-            ),
+            "signal_slot_connections": (self.signal_slot_connections),
         }

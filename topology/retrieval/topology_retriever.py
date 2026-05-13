@@ -15,7 +15,7 @@ from ..scoring.continuity_score_engine import (
 )
 
 
-@dataclass(slots=True)
+@dataclass
 class TopologyRetriever:
     """
     Consolidated topology-aware continuity retrieval engine.
@@ -37,49 +37,47 @@ class TopologyRetriever:
     ownership_index: OwnershipIndex
     scoring_engine: ContinuityScoreEngine
 
-    retrieval_metadata: Dict[str, object] = field(
-        default_factory=dict
-    )
+    retrieval_metadata: Dict[str, object] = field(default_factory=dict)
 
     def retrieve_object_locality(
         self,
         object_id: str,
     ) -> List[str]:
-        return self.locality_index.resolve_locality(
-            object_id
-        )
+        """
+        Retrieve topology-local continuity anchors for an object.
+        """
+        return self.locality_index.resolve_locality(object_id)
 
     def retrieve_execution_locality(
         self,
         path_id: str,
     ) -> List[str]:
-        return self.execution_index.get_execution_locality(
-            path_id
-        )
+        """
+        Retrieve execution-local continuity anchors for a path.
+        """
+        return self.execution_index.get_execution_locality(path_id)
 
     def retrieve_ownership_locality(
         self,
         owner_id: str,
     ) -> List[str]:
-        return self.ownership_index.get_owned_locality(
-            owner_id
-        )
+        """
+        Retrieve ownership-local continuity anchors for an owner.
+        """
+        return self.ownership_index.get_owned_locality(owner_id)
 
     def build_minimal_context(
         self,
         object_id: str,
     ) -> Dict[str, object]:
-        locality = self.retrieve_object_locality(
-            object_id
-        )
+        locality = self.retrieve_object_locality(object_id)
 
-        confidence = self.scoring_engine.score_locality(
-            locality
-        )
+        confidence = self.scoring_engine.score_locality(locality)
 
         return {
             "object_id": object_id,
             "locality": locality,
+            "anchors": locality,
             "confidence": confidence,
         }
 

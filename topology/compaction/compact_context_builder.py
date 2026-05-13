@@ -8,7 +8,7 @@ from ..retrieval.topology_retriever import (
 )
 
 
-@dataclass(slots=True)
+@dataclass
 class CompactContextBuilder:
     """
     Consolidated compact continuity reconstruction builder.
@@ -40,19 +40,14 @@ class CompactContextBuilder:
 
     default_locality_limit: int = 12
 
-    builder_metadata: Dict[str, object] = field(
-        default_factory=dict
-    )
+    builder_metadata: Dict[str, object] = field(default_factory=dict)
 
     def build_compact_object_context(
         self,
         object_id: str,
         locality_limit: Optional[int] = None,
     ) -> Dict[str, object]:
-        locality = (
-            self.topology_retriever
-            .retrieve_object_locality(object_id)
-        )
+        anchors = self.topology_retriever.retrieve_object_locality(object_id)
 
         limit = (
             locality_limit
@@ -60,21 +55,19 @@ class CompactContextBuilder:
             else self.default_locality_limit
         )
 
-        compact_locality = locality[:limit]
+        compact_anchors = anchors[:limit]
 
-        minimal_context = (
-            self.topology_retriever
-            .build_minimal_context(object_id)
-        )
+        minimal_context = self.topology_retriever.build_minimal_context(object_id)
 
         return {
             "object_id": object_id,
-            "locality": compact_locality,
+            "anchors": compact_anchors,
+            "locality": compact_anchors,
             "confidence": minimal_context.get(
                 "confidence",
                 0.0,
             ),
-            "locality_count": len(compact_locality),
+            "anchor_count": len(compact_anchors),
         }
 
     def build_multi_object_context(
@@ -103,17 +96,12 @@ class CompactContextBuilder:
         path_id: str,
         locality_limit: Optional[int] = None,
     ) -> Dict[str, object]:
-        object_context = (
-            self.build_compact_object_context(
-                object_id=object_id,
-                locality_limit=locality_limit,
-            )
+        object_context = self.build_compact_object_context(
+            object_id=object_id,
+            locality_limit=locality_limit,
         )
 
-        execution_locality = (
-            self.topology_retriever
-            .retrieve_execution_locality(path_id)
-        )
+        execution_anchors = self.topology_retriever.retrieve_execution_locality(path_id)
 
         limit = (
             locality_limit
@@ -123,9 +111,8 @@ class CompactContextBuilder:
 
         return {
             "object_context": object_context,
-            "execution_locality": (
-                execution_locality[:limit]
-            ),
+            "execution_anchors": (execution_anchors[:limit]),
+            "execution_locality": (execution_anchors[:limit]),
             "execution_path": path_id,
         }
 
@@ -133,11 +120,9 @@ class CompactContextBuilder:
         self,
         object_ids: List[str],
     ) -> Dict[str, object]:
-        bundle = (
-            self.build_multi_object_context(
-                object_ids=object_ids,
-                locality_limit=self.default_locality_limit,
-            )
+        bundle = self.build_multi_object_context(
+            object_ids=object_ids,
+            locality_limit=self.default_locality_limit,
         )
 
         return {
@@ -147,8 +132,6 @@ class CompactContextBuilder:
 
     def to_dict(self) -> Dict[str, object]:
         return {
-            "default_locality_limit": (
-                self.default_locality_limit
-            ),
+            "default_locality_limit": (self.default_locality_limit),
             "builder_metadata": self.builder_metadata,
         }

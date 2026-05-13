@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from ..indexes.graph_index import GraphIndex
 
 
-@dataclass(slots=True)
+@dataclass
 class GraphQueryEngine:
     """
     Deterministic topology-aware graph query engine.

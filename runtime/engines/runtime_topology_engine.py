@@ -10,7 +10,7 @@ from ...continuity.registry.continuity_registry import (
 from ...continuity.registry.runtime_registry import RuntimeRegistry
 
 
-@dataclass(slots=True)
+@dataclass
 class RuntimeTopologyEngine:
     """
     Primary runtime topology reconstruction engine.

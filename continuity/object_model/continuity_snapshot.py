@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Dict, List
 
 
-@dataclass(slots=True)
+@dataclass
 class ContinuitySnapshot:
     """
     Deterministic continuity-state snapshot.

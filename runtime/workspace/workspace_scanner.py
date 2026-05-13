@@ -11,7 +11,7 @@ SUPPORTED_SOURCE_SUFFIXES = {
 }
 
 
-@dataclass(slots=True)
+@dataclass
 class WorkspaceScanner:
     """
     Deterministic workspace topology scanner.

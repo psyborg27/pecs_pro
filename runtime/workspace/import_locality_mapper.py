@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Dict, List, Set
 
 
-@dataclass(slots=True)
+@dataclass
 class ImportLocalityMapper:
     """
     Static import locality mapper.

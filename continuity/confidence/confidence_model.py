@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import Dict
 
 
-@dataclass(slots=True)
+@dataclass
 class ConfidenceModel:
     """
     Deterministic topology-first confidence model.

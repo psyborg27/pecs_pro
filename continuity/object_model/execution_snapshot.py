@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Dict, List
 
 
-@dataclass(slots=True)
+@dataclass
 class ExecutionSnapshot:
     """
     Execution-chain continuity snapshot.

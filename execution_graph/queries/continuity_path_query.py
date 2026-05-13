@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from ..indexes.execution_index import ExecutionIndex
 
 
-@dataclass(slots=True)
+@dataclass
 class ContinuityPathQuery:
     """
     Execution-local continuity query interface.

@@ -8,7 +8,7 @@ from ..topology.retrieval.topology_retriever import (
 )
 
 
-@dataclass(slots=True)
+@dataclass
 class ContinueAdapter:
     """
     Consolidated Continue integration adapter.

@@ -6,7 +6,7 @@ from typing import Dict
 from ..object_model.runtime_node import RuntimeNode
 
 
-@dataclass(slots=True)
+@dataclass
 class ContinuityRegistry:
     """
     Master deterministic continuity registry.

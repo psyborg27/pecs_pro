@@ -9,7 +9,7 @@ from ..graph.dispatch_graph import DispatchGraph
 from ..graph.propagation_graph import PropagationGraph
 
 
-@dataclass(slots=True)
+@dataclass
 class GraphConsolidator:
     """
     Deterministic execution-topology graph consolidator.

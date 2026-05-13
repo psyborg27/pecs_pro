@@ -8,7 +8,7 @@ from ..topology.retrieval.topology_retriever import (
 )
 
 
-@dataclass(slots=True)
+@dataclass
 class CopilotAdapter:
     """
     Consolidated Copilot integration adapter.

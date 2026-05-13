@@ -1,0 +1,121 @@
+Metadata-Version: 2.4
+Name: pecs_pro
+Version: 0.1.0
+Summary: PECS-PRO workspace continuity cache and daemon
+Author: PECS-PRO
+Project-URL: Home, https://example.com/pecs_pro
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+Dynamic: requires-python
+
+# PECS-PRO
+
+## IMPORTANT WARNING
+
+PECS-PRO is experimental prototype software.
+It is provided "AS IS" with no warranties or guarantees.
+
+Do not use PECS-PRO directly on production, safety-critical, financial, medical, or security-sensitive systems.
+Always use:
+- isolated test workspaces
+- cloned repositories
+- version control
+- backups
+- human supervision
+
+PECS may:
+- misclassify locality
+- infer incorrect continuity
+- generate incomplete retrieval state
+- produce unstable context bundles
+- damage workspace assumptions
+
+## Requirements
+
+- Python 3.9
+- `pip install -e .` from the package root to install in editable mode
+- `watchdog` for live daemon monitoring
+
+## What PECS-PRO v2 does
+
+PECS-PRO v2 is a continuity cache and topology-aware context builder.
+It is designed to preserve:
+- topology-local continuity
+- object locality
+- ownership continuity
+- execution continuity
+
+PECS-PRO v2 is intentionally:
+- deterministic
+- topology-first
+- low-token
+- incremental
+- non-invasive
+- cache-only
+
+## What changed in v2 vs v1
+
+### v1
+- line-number continuity anchors like `file.py:42`
+- file-based locality tokens
+- heavier continuity payloads
+- no persistent live daemon
+
+### v2
+- canonical symbolic anchors like `PECS_ID:viewer.overlay.sync`
+- compact anchor-based locality storage
+- topology-aware retrieval via `TopologyRetriever`
+- incremental live daemon generating `.pecs/` artifacts
+- low-token compact context export via `CompactContextBuilder`
+- no AST-heavy reconstruction or large continuity payloads
+
+## Installation
+
+From the repository root:
+
+```bash
+python3 -m pip install -e .
+```
+
+Then install `watchdog`:
+
+```bash
+python3 -m pip install watchdog
+```
+
+## Running the daemon
+
+To start the live continuity daemon for a workspace:
+
+```bash
+cd /path/to/your/workspace
+pecs-pro-daemon .
+```
+
+Or directly:
+
+```bash
+python3 /path/to/PECS_PRO_V2_FINAL/pecs_pro/run_pecs_daemon.py .
+```
+
+The daemon creates and updates a disposable `.pecs/` directory inside the monitored workspace.
+
+## Notes
+
+- Installing the package does not automatically start the daemon.
+- The daemon must be running for `.pecs/` artifacts to be generated.
+- `.pecs/` is cache-only and disposable.
+- Do not edit `.pecs/` manually.
+
+## Recommended workflow
+
+1. Install PECS-PRO in editable mode.
+2. Start the daemon before editing the target workspace.
+3. Make sure `.pecs/` is present and being updated.
+4. Consume `.pecs/` JSON exports from tooling or integrations.
+
+## Disclaimer
+
+PECS-PRO is not an autonomous AI project manager.
+It is a continuity infrastructure layer only.
+Use it to support human-directed workflows, not to replace them.

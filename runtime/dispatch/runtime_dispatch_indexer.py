@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List
 
 
-@dataclass(slots=True)
+@dataclass
 class RuntimeDispatchIndexer:
     """
     Runtime dispatch locality indexer.

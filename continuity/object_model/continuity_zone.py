@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Set
 
 
-@dataclass(slots=True)
+@dataclass
 class ContinuityZone:
     """
     Execution-topological continuity region.

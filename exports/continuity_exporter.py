@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Dict
 
 
-@dataclass(slots=True)
+@dataclass
 class ContinuityExporter:
     """
     Deterministic continuity export authority.

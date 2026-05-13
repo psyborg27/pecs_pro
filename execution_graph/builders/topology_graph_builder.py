@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import Dict
 
 
-@dataclass(slots=True)
+@dataclass
 class TopologyGraphBuilder:
     """
     Runtime topology graph builder.

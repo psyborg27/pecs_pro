@@ -21,7 +21,7 @@ class OwnershipEdgeType(str, Enum):
     EXECUTION_OWNER = "execution_owner"
 
 
-@dataclass(slots=True)
+@dataclass
 class OwnershipEdge:
     """
     Runtime ownership relationship.

@@ -8,7 +8,7 @@ from ..topology.retrieval.topology_retriever import (
 )
 
 
-@dataclass(slots=True)
+@dataclass
 class ContextExportAdapter:
     """
     Consolidated continuity export adapter.

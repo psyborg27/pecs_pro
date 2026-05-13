@@ -11,7 +11,7 @@ from ..topology.indexing.locality_index import (
 )
 
 
-@dataclass(slots=True)
+@dataclass
 class ContinuityValidator:
     """
     Consolidated PECS continuity integrity validator.

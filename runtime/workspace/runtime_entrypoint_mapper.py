@@ -11,7 +11,7 @@ ENTRYPOINT_PATTERNS = (
 )
 
 
-@dataclass(slots=True)
+@dataclass
 class RuntimeEntrypointMapper:
     """
     Runtime entrypoint discovery mapper.

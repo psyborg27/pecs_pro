@@ -17,7 +17,7 @@ class PropagationEdgeType(str, Enum):
     ANNOTATION_PROPAGATION = "annotation_propagation"
 
 
-@dataclass(slots=True)
+@dataclass
 class PropagationEdge:
     """
     Runtime propagation topology edge.
