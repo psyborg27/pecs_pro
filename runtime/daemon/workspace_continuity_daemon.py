@@ -9,10 +9,15 @@ import time
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Deque, Dict, List, Optional, Set, Tuple
+from typing import Deque, Dict, Iterable, List, Optional, Set, Tuple
 
-from ..session.workspace_runtime_session import WorkspaceRuntimeSession
+from ..locality_activation_engine import LocalityActivationEngine
+from ..runtime_activation_logger import RuntimeActivationLogger
 from ...topology.compaction.compact_context_builder import CompactContextBuilder
+from ...topology.locality_traversal import LocalityTraversal
+from ...topology.runtime_edge_reinforcement import RuntimeEdgeReinforcement
+from ...topology.topology_edge_weights import edge_weight
+from ..session.workspace_runtime_session import WorkspaceRuntimeSession
 
 # Keep watchdog imports at module scope so nested handlers can always resolve.
 try:
@@ -84,6 +89,14 @@ class WorkspaceContinuityDaemon:
         self.workspace_root = self.workspace_root.resolve()
         self.artifact_dir = self.workspace_root / self.artifact_dir_name
         self.artifact_dir.mkdir(parents=True, exist_ok=True)
+        self.runtime_activation_logger = RuntimeActivationLogger(self.artifact_dir)
+        self.locality_activation_engine = LocalityActivationEngine(
+            self.runtime_activation_logger
+        )
+        self.edge_reinforcement = RuntimeEdgeReinforcement()
+        self.locality_traversal = LocalityTraversal()
+        self.runtime_snapshot_dir = self.artifact_dir / "runtime_topology_snapshots"
+        self.runtime_snapshot_dir.mkdir(parents=True, exist_ok=True)
 
         if not self.workspace_root.exists():
             raise FileNotFoundError(
@@ -236,6 +249,9 @@ class WorkspaceContinuityDaemon:
         if self._chat_history_path in changed_files:
             self._on_chat_history_update()
 
+        if self.runtime_activation_logger.event_path in changed_files:
+            self._on_activation_update()
+
         python_changed_files = [p for p in changed_files if p.suffix == ".py"]
         if not python_changed_files:
             return
@@ -252,8 +268,11 @@ class WorkspaceContinuityDaemon:
         self._populate_runtime_indexes(reachable_files)
 
         focus = self._infer_active_focus_from_chat()
-        compact_bundle = self._build_compact_bundle(focus)
-        active_context = self._build_active_context_payload(focus, compact_bundle)
+        activation = self._infer_locality_activation(focus)
+        compact_bundle = self._build_compact_bundle(focus, activation)
+        active_context = self._build_active_context_payload(
+            focus, compact_bundle, activation
+        )
         topology_payload = {
             "entrypoints": [self._pecs_id_from_path(p) for p in entrypoints],
             "edges": self.runtime_topology_edges,
@@ -264,6 +283,7 @@ class WorkspaceContinuityDaemon:
         self._write_json("topology_compact.json", topology_payload)
         self._write_json("compact_bundle.json", compact_bundle)
         self._write_json("active_context.json", active_context)
+        self._write_runtime_topology_snapshot(activation)
         self._write_json(
             "session_context.json",
             {
@@ -500,10 +520,11 @@ class WorkspaceContinuityDaemon:
             return edges
 
         for action_var in re.findall(r"\b(\w+)\s*=\s*QAction\s*\(", source):
+            target_id = f"PECS_ID:action.{action_var}"
             edges.append(
                 {
                     "from": source_id,
-                    "to": f"PECS_ID:action.{action_var}",
+                    "to": target_id,
                     "type": "qaction_register",
                 }
             )
@@ -512,10 +533,11 @@ class WorkspaceContinuityDaemon:
             r"\b(\w+)\.triggered\.connect\(\s*self\.(\w+)\s*\)",
             source,
         ):
+            target_id = f"{source_id}.{method_name}"
             edges.append(
                 {
                     "from": f"PECS_ID:action.{action_var}",
-                    "to": f"{source_id}.{method_name}",
+                    "to": target_id,
                     "type": "signal_slot",
                 }
             )
@@ -523,19 +545,21 @@ class WorkspaceContinuityDaemon:
         for method_name in re.findall(
             r"\b(?:open|launch|show)_([A-Za-z_][\w]*)\s*\(", source
         ):
+            target_id = f"PECS_ID:dialog.{method_name}"
             edges.append(
                 {
                     "from": source_id,
-                    "to": f"PECS_ID:dialog.{method_name}",
+                    "to": target_id,
                     "type": "dialog_launch",
                 }
             )
 
-        for method_name in re.findall(r"\bsubprocess\.(?:run|Popen)\s*\(", source):
+        for _ in re.findall(r"\bsubprocess\.(?:run|Popen)\s*\(", source):
+            target_id = "PECS_ID:subprocess.launch"
             edges.append(
                 {
                     "from": source_id,
-                    "to": "PECS_ID:subprocess.launch",
+                    "to": target_id,
                     "type": "subprocess_launch",
                 }
             )
@@ -664,12 +688,96 @@ class WorkspaceContinuityDaemon:
         payload["focus_terms"] = sorted(set(focus_terms))[:16]
         return payload
 
-    def _build_compact_bundle(self, focus: Dict[str, object]) -> Dict[str, object]:
+    def _infer_locality_activation(
+        self,
+        focus: Dict[str, object],
+    ) -> Dict[str, object]:
+        issue = str(focus.get("current_issue", ""))
+        edited_files = [
+            str(path.relative_to(self.workspace_root))
+            for path in sorted(self.runtime_reachable_files)
+            if path.suffix == ".py"
+        ]
+        dissatisfaction = focus.get("dissatisfaction_signals", [])
+        activation = self.locality_activation_engine.infer_locality(
+            current_issue=issue,
+            edited_files=edited_files,
+            dissatisfaction_signals=dissatisfaction,
+        )
+        self.edge_reinforcement.reset()
+        self.edge_reinforcement.reinforce_edges(activation.get("observed_edges", []))
+        return activation
+
+    def _on_activation_update(self) -> None:
+        if not self.runtime_locality_payload:
+            return
+
+        focus = self._infer_active_focus_from_chat()
+        activation = self._infer_locality_activation(focus)
+        compact_bundle = self._build_compact_bundle(focus, activation)
+        active_context = self._build_active_context_payload(
+            focus, compact_bundle, activation
+        )
+        self._write_json("compact_bundle.json", compact_bundle)
+        self._write_json("active_context.json", active_context)
+
+    def _write_runtime_topology_snapshot(self, activation: Dict[str, object]) -> None:
+        timestamp = int(time.time())
+        snapshot_path = self.runtime_snapshot_dir / f"snapshot_{timestamp}.json"
+        snapshot = {
+            "timestamp": timestamp,
+            "workspace_root": str(self.workspace_root),
+            "active_runtime_zones": activation.get("active_runtime_zones", []),
+            "activated_objects": activation.get("activated_objects", []),
+            "activation_confidence": activation.get("activation_confidence", {}),
+            "runtime_edges": [edge for edge in self.runtime_topology_edges[:80]],
+        }
+        snapshot_path.write_text(
+            json.dumps(snapshot, indent=2, sort_keys=True), encoding="utf-8"
+        )
+
+        snapshots = sorted(self.runtime_snapshot_dir.glob("snapshot_*.json"))
+        if len(snapshots) > 8:
+            for old_snapshot in snapshots[:-8]:
+                try:
+                    old_snapshot.unlink()
+                except OSError:
+                    pass
+
+    def _build_compact_bundle(
+        self,
+        focus: Dict[str, object],
+        activation: Dict[str, object],
+    ) -> Dict[str, object]:
         focus_terms = set(focus.get("focus_terms", []))
         active_zone = str(focus.get("active_topology_zone", "general_runtime"))
+        seeds = list(activation.get("activated_objects", []))
+
+        self.edge_reinforcement.reset()
+        self.edge_reinforcement.reinforce_edges(activation.get("observed_edges", []))
+        weighted_edges = self.edge_reinforcement.weighted_edges(
+            self.runtime_topology_edges
+        )
+
+        if not seeds:
+            seeds = [
+                pecs_id
+                for pecs_id, meta in self.runtime_locality_payload.items()
+                if meta.get("runtime_zone") == active_zone
+            ][:6]
+
+        selected_ids = self.locality_traversal.traverse(
+            seed_ids=seeds,
+            edges=weighted_edges,
+            max_nodes=40,
+            max_budget=120,
+        )
 
         scored: List[Tuple[int, str, Dict[str, object]]] = []
         for pecs_id, meta in self.runtime_locality_payload.items():
+            if pecs_id not in selected_ids:
+                continue
+
             score = 0
             runtime_zone = str(meta.get("runtime_zone", ""))
             file_name = str(meta.get("file", "")).lower()
@@ -677,44 +785,43 @@ class WorkspaceContinuityDaemon:
             if runtime_zone == active_zone:
                 score += 5
 
+            if pecs_id in seeds:
+                score += 8
+
             for term in focus_terms:
                 if term in file_name or term in pecs_id.lower():
                     score += 2
 
-            if score > 0:
-                scored.append((score, pecs_id, meta))
+            scored.append((score, pecs_id, meta))
 
         scored.sort(key=lambda item: (-item[0], item[1]))
 
-        selected = (
-            scored[:50]
-            if scored
-            else [
-                (0, k, v) for k, v in sorted(self.runtime_locality_payload.items())[:20]
-            ]
-        )
-
-        bundle = []
-        for score, pecs_id, meta in selected:
-            bundle.append(
-                {
-                    "pecs_id": pecs_id,
-                    "file": meta.get("file", ""),
-                    "runtime_zone": meta.get("runtime_zone", "general_runtime"),
-                    "score": score,
-                }
-            )
+        selected = scored[:40]
+        bundle = [
+            {
+                "pecs_id": pecs_id,
+                "file": meta.get("file", ""),
+                "runtime_zone": meta.get("runtime_zone", "general_runtime"),
+                "score": score,
+            }
+            for score, pecs_id, meta in selected
+        ]
 
         return {
             "bundle": bundle,
             "context_count": len(bundle),
             "active_topology_zone": active_zone,
+            "active_runtime_zones": activation.get("active_runtime_zones", []),
+            "activated_objects": activation.get("activated_objects", []),
+            "activation_confidence": activation.get("activation_confidence", {}),
+            "activation_reasons": activation.get("activation_reasons", {}),
         }
 
     def _build_active_context_payload(
         self,
         focus: Dict[str, object],
         compact_bundle: Dict[str, object],
+        activation: Dict[str, object],
     ) -> Dict[str, object]:
         bundle_ids = [
             entry.get("pecs_id", "") for entry in compact_bundle.get("bundle", [])
@@ -726,11 +833,21 @@ class WorkspaceContinuityDaemon:
             if edge.get("from") in bundle_ids or edge.get("to") in bundle_ids
         ][:120]
 
+        active_objects = activation.get("activated_objects", [])
+        self.runtime_session.active_objects = set(active_objects)
+        self.runtime_session.active_zones = set(
+            activation.get("active_runtime_zones", [])
+        )
+
         return {
             "current_issue": focus.get("current_issue", ""),
             "active_topology_zone": focus.get(
                 "active_topology_zone", "general_runtime"
             ),
+            "active_runtime_zones": activation.get("active_runtime_zones", []),
+            "activated_objects": active_objects,
+            "activation_confidence": activation.get("activation_confidence", {}),
+            "activation_reasons": activation.get("activation_reasons", {}),
             "recent_locality": bundle_ids[:25],
             "runtime_neighborhood": neighborhood,
             "dissatisfaction_signals": focus.get("dissatisfaction_signals", []),
@@ -767,8 +884,11 @@ class WorkspaceContinuityDaemon:
         # Refresh only compact artifacts from chat focus without widening topology.
         if self.runtime_locality_payload:
             focus = self._infer_active_focus_from_chat()
-            compact_bundle = self._build_compact_bundle(focus)
-            active_context = self._build_active_context_payload(focus, compact_bundle)
+            activation = self._infer_locality_activation(focus)
+            compact_bundle = self._build_compact_bundle(focus, activation)
+            active_context = self._build_active_context_payload(
+                focus, compact_bundle, activation
+            )
             self._write_json("compact_bundle.json", compact_bundle)
             self._write_json("active_context.json", active_context)
 
@@ -812,6 +932,9 @@ class WorkspaceContinuityDaemon:
         path = path.resolve()
 
         if path == self._chat_history_path:
+            return True
+
+        if path == self.runtime_activation_logger.event_path:
             return True
 
         if path.suffix != ".py":

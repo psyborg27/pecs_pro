@@ -28,12 +28,16 @@ PECS may:
 
 ## What PECS-PRO v2 does
 
-PECS-PRO v2 is a continuity cache and topology-aware context builder.
+PECS-PRO v2 is a continuity stabilization system and topology-aware context builder.
 It is designed to preserve:
 - topology-local continuity
 - object locality
 - ownership continuity
 - execution continuity
+
+PECS-PRO does not replace LLM reasoning.
+The LLM performs reasoning, inference, reconstruction, and ambiguity resolution.
+PECS stabilizes continuity anchors so the LLM can reconstruct state reliably from compact workspace evidence.
 
 PECS-PRO v2 is intentionally:
 - deterministic
@@ -42,6 +46,14 @@ PECS-PRO v2 is intentionally:
 - incremental
 - non-invasive
 - cache-only
+
+PECS-PRO intentionally avoids:
+- telemetry architectures
+- tracing infrastructures
+- vector databases
+- semantic indexing
+- orchestration layers
+- runtime analytics
 
 ## What changed in v2 vs v1
 
@@ -58,6 +70,27 @@ PECS-PRO v2 is intentionally:
 - incremental live daemon generating `.pecs/` artifacts
 - low-token compact context export via `CompactContextBuilder`
 - no AST-heavy reconstruction or large continuity payloads
+
+## Minimal Continuity Algorithm
+
+PECS minimal continuity works as a small stabilization loop:
+
+1. Static topology extraction
+- collect structural topology anchors and compact locality artifacts
+
+2. Sparse runtime validation
+- use sparse runtime activation evidence only to reinforce active topology paths
+
+3. Locality heuristics
+- track edit clusters, repeated locality, runtime-touched files, and continuity hotspots
+
+4. Continuity snapshots
+- compress architectural state into compact JSON and Markdown exports
+
+5. LLM reconstruction
+- the LLM performs synthesis, reasoning, and reconstruction from these compact continuity anchors
+
+PECS does not perform the reasoning itself.
 
 ## Installation
 
@@ -248,7 +281,10 @@ The daemon creates and updates a disposable `.pecs/` directory inside the monito
 1. Install PECS-PRO in editable mode.
 2. Start the daemon before editing the target workspace.
 3. Make sure `.pecs/` is present and being updated.
-4. Consume `.pecs/` JSON exports from tooling or integrations.
+4. Periodically export continuity state from `.pecs/` into compact continuity snapshots.
+5. Consume `.pecs/` JSON exports from tooling or integrations.
+
+New projects benefit from early continuity initialization so topology anchors and continuity snapshots exist before sessions become fragmented.
 
 ## Disclaimer
 

@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, List
 
+from ..runtime_activation_events import emit_runtime_activation
+
 
 @dataclass
 class ViewerOwnershipMapper:
@@ -13,9 +15,7 @@ class ViewerOwnershipMapper:
     ownership continuity.
     """
 
-    viewer_ownership: Dict[str, List[str]] = field(
-        default_factory=dict
-    )
+    viewer_ownership: Dict[str, List[str]] = field(default_factory=dict)
 
     def register_viewer_ownership(
         self,
@@ -26,6 +26,12 @@ class ViewerOwnershipMapper:
             owner_id,
             [],
         ).append(viewer_id)
+        emit_runtime_activation(
+            event="topology_touch",
+            source=owner_id,
+            target=viewer_id,
+            runtime_zone="viewer_pipeline",
+        )
 
     def to_dict(self) -> Dict[str, object]:
         return {
