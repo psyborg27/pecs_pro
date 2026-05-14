@@ -86,12 +86,34 @@ def _merge_tasks(tasks_path: Path, repo_root: Path) -> None:
         ),
     }
 
+    refresh_continuity_task = {
+        "label": "PECS: Refresh Continuity State",
+        "type": "shell",
+        "command": (
+            'bash -lc \'cd "${workspaceFolder}" '
+            "&& if [[ -f .venv/bin/activate ]]; then source .venv/bin/activate; fi "
+            '&& python3 .pecs/bridge/run_bridge.py refresh --workspace "${workspaceFolder}"\''
+        ),
+    }
+
+    validate_continuity_task = {
+        "label": "PECS: Validate Continuity State",
+        "type": "shell",
+        "command": (
+            'bash -lc \'cd "${workspaceFolder}" '
+            "&& if [[ -f .venv/bin/activate ]]; then source .venv/bin/activate; fi "
+            '&& python3 .pecs/bridge/run_bridge.py validate --workspace "${workspaceFolder}"\''
+        ),
+    }
+
     desired_tasks = [
         start_task,
         auto_start_task,
         stop_task,
         append_task,
         manual_update_task,
+        refresh_continuity_task,
+        validate_continuity_task,
     ]
 
     existing_by_label = {
@@ -187,9 +209,160 @@ def _install_chat_tools(workspace_root: Path, repo_root: Path) -> None:
         chat_history.write_text("[]\n", encoding="utf-8")
 
 
+def _install_bridge_runtime(workspace_root: Path, repo_root: Path) -> None:
+    bridge_dir = workspace_root / ".pecs" / "bridge"
+    config_dir = workspace_root / ".pecs" / "config"
+    runtime_dir = workspace_root / ".pecs" / "runtime"
+    continuity_dir = workspace_root / ".pecs" / "continuity"
+
+    bridge_dir.mkdir(parents=True, exist_ok=True)
+    config_dir.mkdir(parents=True, exist_ok=True)
+    runtime_dir.mkdir(parents=True, exist_ok=True)
+    continuity_dir.mkdir(parents=True, exist_ok=True)
+
+    (runtime_dir / ".gitkeep").write_text("", encoding="utf-8")
+
+    export_source = repo_root / "scripts" / "export_workspace_continuity.py"
+    validate_source = repo_root / "scripts" / "validate_workspace_continuity.py"
+
+    (bridge_dir / "export_workspace_continuity.py").write_text(
+        export_source.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    (bridge_dir / "validate_workspace_continuity.py").write_text(
+        validate_source.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    bridge_runner = """from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+from export_workspace_continuity import export_workspace_continuity
+from validate_workspace_continuity import validate_workspace_continuity
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description=\"Workspace-local PECS deterministic continuity bridge\"
+    )
+    parser.add_argument(
+        \"command\",
+        choices=[\"refresh\", \"validate\"],
+        help=\"Bridge command to run\",
+    )
+    parser.add_argument(
+        \"workspace_root\",
+        nargs=\"?\",
+        default=None,
+        help=\"Workspace root path (default: current directory).\",
+    )
+    parser.add_argument(
+        \"--workspace\",
+        dest=\"workspace_flag\",
+        default=None,
+        help=\"Workspace root path.\",
+    )
+    args = parser.parse_args()
+
+    workspace_value = args.workspace_flag or args.workspace_root or \".\"
+    workspace_root = Path(workspace_value).resolve()
+
+    if args.command == \"refresh\":
+        result = export_workspace_continuity(workspace_root)
+    else:
+        result = validate_workspace_continuity(workspace_root)
+
+    print(json.dumps(result, indent=2, sort_keys=True))
+
+
+if __name__ == \"__main__\":
+    main()
+"""
+    (bridge_dir / "run_bridge.py").write_text(bridge_runner, encoding="utf-8")
+
+    bridge_sh = """#!/usr/bin/env bash
+set -euo pipefail
+
+WORKSPACE_ROOT="${1:-.}"
+COMMAND="${2:-refresh}"
+
+cd "$WORKSPACE_ROOT"
+if [[ -f .venv/bin/activate ]]; then
+  source .venv/bin/activate
+fi
+
+python3 .pecs/bridge/run_bridge.py "$COMMAND" --workspace "$WORKSPACE_ROOT"
+"""
+    (bridge_dir / "run_bridge.sh").write_text(bridge_sh, encoding="utf-8")
+
+    bridge_config = {
+        "schema": "pecs.bridge.config.v1",
+        "mode": "deterministic_continuity_stabilization",
+        "compare_before_write": True,
+        "omit_empty_sections": True,
+        "sparse_output": True,
+    }
+    (config_dir / "continuity_bridge.json").write_text(
+        json.dumps(bridge_config, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+
+    continuity_scaffold = {
+        "active_topology.json": {
+            "schema": "pecs.active_topology.v1",
+            "active_topology_zone": "general_runtime",
+            "active_runtime_zones": [],
+            "runtime_validation": {
+                "runtime_evidence_count": 0,
+                "runtime_confirmations": 0,
+                "active_topology_targeting": 0.0,
+                "runtime_confirmation_density": 0.0,
+            },
+            "validation_metrics": {
+                "edit_locality_improvement": 0.0,
+                "active_topology_targeting": 0.0,
+                "continuity_hotspot_identification": 0.0,
+                "runtime_confirmation_density": 0.0,
+                "continuity_compression_effectiveness": 0.0,
+            },
+            "workspace_trajectory": "general_runtime",
+        },
+        "locality_state.json": {
+            "schema": "pecs.locality_state.v1",
+            "validation_metrics": {
+                "edit_locality_improvement": 0.0,
+                "active_topology_targeting": 0.0,
+                "continuity_hotspot_identification": 0.0,
+                "runtime_confirmation_density": 0.0,
+                "continuity_compression_effectiveness": 0.0,
+            },
+        },
+    }
+
+    for file_name, payload in continuity_scaffold.items():
+        path = continuity_dir / file_name
+        if not path.exists():
+            path.write_text(
+                json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8"
+            )
+
+    markdown_scaffold = {
+        "architectural_decisions.md": "# Architectural Decisions\n",
+        "current_workspace_focus.md": "# Current Workspace Focus\n",
+        "unresolved_tensions.md": "# Unresolved Tensions\n",
+    }
+    for file_name, content in markdown_scaffold.items():
+        path = continuity_dir / file_name
+        if not path.exists():
+            path.write_text(content, encoding="utf-8")
+
+
 def _write_readme(workspace_root: Path) -> None:
     readme = workspace_root / ".pecs" / "README_WORKSPACE_INTEGRATION.md"
-    content = """# PECS Workspace Integration\n\nThis workspace was configured by PECS workspace installer.\n\nInstalled items:\n- .vscode/tasks.json (PECS tasks, including folder-open auto-start)\n- .vscode/settings.json with pecs.contextPath\n- .continue/rules/PECS_CONTEXT_RULE.md\n- .continue/rules/PECS_APPEND_RULE.md\n- .github/copilot-instructions.md\n- .pecs/tools/append_ai_chat_history.py\n- .pecs/ai_chat_history.json\n- .pecs/README_MANUAL_SETUP.md\n\nRun manually:\n- Task: PECS: Start Daemon\n- Task: PECS: Stop Daemon\n- Task: PECS: Append Chat Event\n\nNotes:\n- Auto-start task may require VS Code confirmation for automatic tasks.\n- Extension-level automatic chat append depends on each extension's hook/event support.\n"""
+    content = """# PECS Workspace Integration\n\nThis workspace was configured by PECS workspace installer.\n\nInstalled items:\n- .vscode/tasks.json (PECS tasks, including folder-open auto-start)\n- .vscode/settings.json with pecs.contextPath\n- .continue/rules/PECS_CONTEXT_RULE.md\n- .continue/rules/PECS_APPEND_RULE.md\n- .github/copilot-instructions.md\n- .pecs/tools/append_ai_chat_history.py\n- .pecs/ai_chat_history.json\n- .pecs/bridge/run_bridge.py\n- .pecs/bridge/export_workspace_continuity.py\n- .pecs/bridge/validate_workspace_continuity.py\n- .pecs/config/continuity_bridge.json\n- .pecs/README_MANUAL_SETUP.md\n\nRun manually:\n- Task: PECS: Start Daemon\n- Task: PECS: Stop Daemon\n- Task: PECS: Refresh Continuity State\n- Task: PECS: Validate Continuity State\n\nNotes:\n- Auto-start task may require VS Code confirmation for automatic tasks.\n- Extension-level automatic chat append depends on each extension's hook/event support.\n"""
     readme.parent.mkdir(parents=True, exist_ok=True)
     readme.write_text(content, encoding="utf-8")
 
@@ -204,6 +377,7 @@ def _copy_manual_setup_guide(workspace_root: Path, repo_root: Path) -> None:
 
 def install_workspace(workspace_root: Path, repo_root: Path) -> None:
     _install_chat_tools(workspace_root, repo_root)
+    _install_bridge_runtime(workspace_root, repo_root)
     _merge_tasks(workspace_root / ".vscode" / "tasks.json", repo_root)
     _merge_json_dict(
         workspace_root / ".vscode" / "settings.json",

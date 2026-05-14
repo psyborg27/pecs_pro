@@ -2,6 +2,27 @@
 
 This guide is for users who want to install PECS into a workspace without using the auto-installer script.
 
+## Experimental status
+
+PECS is experimental and currently in an early proof-of-concept stage.
+It has been developed through AI-assisted and agentic coding workflows,
+primarily by a non-traditional software developer.
+
+Validate all outputs manually.
+Do not use on production or commercially critical systems.
+Use backups, version control, and human supervision.
+PECS does not replace engineering judgment.
+
+## Supported AI tooling
+
+PECS is currently designed and tested primarily for:
+
+- GitHub Copilot Chat
+- Continue
+
+Other VS Code AI extensions may not preserve compatible continuity/workflow behavior.
+PECS does not claim universal compatibility.
+
 ## What to copy into the workspace
 
 Copy these files from the PECS package folder into the target workspace:
@@ -15,7 +36,7 @@ Copy these files from the PECS package folder into the target workspace:
 
 Create these files if they do not already exist:
 
-- `.pecs/ai_chat_history.json` with an initial value of `[]`
+- `.pecs/ai_chat_history.json` with an initial value of `[]` (optional)
 - `.vscode/tasks.json`
 - `.vscode/settings.json`
 
@@ -52,6 +73,20 @@ The auto-installer normally writes these for you, but manually you should ensure
 - `.vscode/settings.json` includes `pecs.contextPath` pointing to `.pecs/active_context.json`
 - Workspace settings are saved in the target workspace, not in the PECS package folder
 
+After setup, open tasks using:
+
+- VSCode
+- Terminal
+- Run Task
+- select a PECS task
+
+Expected task names include:
+
+- `PECS: Start Daemon`
+- `PECS: Stop Daemon`
+- `PECS: Refresh Continuity State`
+- `PECS: Validate Continuity State`
+
 ## Configure Continue
 
 Continue reads rules from `.continue/rules/`.
@@ -83,6 +118,27 @@ If you are starting from the source checkout directly:
 PECS_PRO_REPO="/Users/raj/Downloads/PECS_PRO_V2_FINAL/pecs_pro" \
   /Users/raj/Downloads/PECS_PRO_V2_FINAL/pecs_pro/launch_pecs_daemon.sh "/path/to/your/workspace"
 ```
+
+The daemon is intentionally manual-start during active AI-assisted development sessions.
+It does not auto-start from package installation.
+After stabilization, no-op cycles are intentionally mostly silent
+(no rewrites, no log spam, no continuity churn).
+
+## Bridge lifecycle
+
+Users normally do not run bridge scripts directly.
+Use standard refresh flow (`pecs-pro refresh` or `PECS: Refresh Continuity State`).
+The bridge remains lightweight, deterministic, and non-semantic.
+
+## New AI session handoff
+
+For a new AI session, provide:
+
+- current task/problem
+- `.pecs` continuity state
+
+Prefer this over large historical chat dumps.
+Chat-history replay is optional and experimental.
 
 ## What automatic installation does
 

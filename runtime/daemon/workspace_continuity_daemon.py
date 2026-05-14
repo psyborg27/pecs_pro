@@ -299,7 +299,6 @@ class WorkspaceContinuityDaemon:
             {
                 "workspace_root": str(self.workspace_root),
                 "artifact_dir": str(self.artifact_dir),
-                "changed_files": [str(path) for path in (changed_files or [])],
                 "runtime_reachable_count": len(self.runtime_reachable_files),
             },
         )
@@ -722,27 +721,15 @@ class WorkspaceContinuityDaemon:
         self._write_json("active_context.json", active_context)
 
     def _write_runtime_topology_snapshot(self, activation: Dict[str, object]) -> None:
-        timestamp = int(time.time())
-        snapshot_path = self.runtime_snapshot_dir / f"snapshot_{timestamp}.json"
+        snapshot_path = self.runtime_snapshot_dir / "latest_snapshot.json"
         snapshot = {
-            "timestamp": timestamp,
             "workspace_root": str(self.workspace_root),
             "active_runtime_zones": activation.get("active_runtime_zones", []),
             "activated_objects": activation.get("activated_objects", []),
             "activation_confidence": activation.get("activation_confidence", {}),
             "runtime_edges": [edge for edge in self.runtime_topology_edges[:80]],
         }
-        snapshot_path.write_text(
-            json.dumps(snapshot, indent=2, sort_keys=True), encoding="utf-8"
-        )
-
-        snapshots = sorted(self.runtime_snapshot_dir.glob("snapshot_*.json"))
-        if len(snapshots) > 8:
-            for old_snapshot in snapshots[:-8]:
-                try:
-                    old_snapshot.unlink()
-                except OSError:
-                    pass
+        self._write_json_path(snapshot_path, snapshot)
 
     def _build_compact_bundle(
         self,
@@ -875,7 +862,6 @@ class WorkspaceContinuityDaemon:
                     "chat_entry_count": (
                         len(chat_data) if isinstance(chat_data, list) else 0
                     ),
-                    "updated_at": time.time(),
                 },
             )
         except Exception as exc:
@@ -894,10 +880,28 @@ class WorkspaceContinuityDaemon:
 
     def _write_json(self, name: str, data: object) -> None:
         path = self.artifact_dir / name
+        self._write_json_path(path, data)
+
+    def _canonical_json(self, data: object) -> str:
+        return json.dumps(
+            data, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        )
+
+    def _write_json_path(self, path: Path, data: object) -> None:
         try:
+            canonical_new = self._canonical_json(data)
+            if path.exists():
+                try:
+                    existing = json.loads(path.read_text(encoding="utf-8"))
+                    canonical_existing = self._canonical_json(existing)
+                    if canonical_existing == canonical_new:
+                        return
+                except Exception:
+                    # If existing content is invalid, rewrite once with canonical payload.
+                    pass
+
             path.write_text(
-                json.dumps(data, indent=2, sort_keys=True),
-                encoding="utf-8",
+                json.dumps(data, indent=2, sort_keys=True), encoding="utf-8"
             )
         except OSError as exc:
             LOG.warning("Failed to write PECS artifact %s: %s", path, exc)
@@ -923,8 +927,6 @@ class WorkspaceContinuityDaemon:
             {
                 "workspace_root": str(self.workspace_root),
                 "artifact_dir": str(self.artifact_dir),
-                "daemon_pid": os.getpid(),
-                "started_at": time.time(),
             },
         )
 

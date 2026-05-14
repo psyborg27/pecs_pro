@@ -10,6 +10,7 @@ setup(
     python_requires=">=3.9",
     entry_points={
         "console_scripts": [
+            "pecs-pro=pecs_pro.workspace_bridge_cli:main",
             "pecs-pro-daemon=pecs_pro.run_pecs_daemon:main",
             "pecs-pro-install-workspace=pecs_pro.install_workspace_integration:main",
         ],

@@ -3,7 +3,15 @@
 ## IMPORTANT WARNING
 
 PECS-PRO is experimental prototype software.
-It is provided "AS IS" with no warranties or guarantees.
+PECS-PRO is in an early proof-of-concept stage.
+
+This project has been developed through AI-assisted and agentic coding workflows,
+primarily by a non-traditional software developer.
+
+All outputs require manual engineering validation.
+Do not use PECS-PRO on production or commercially critical systems.
+Use backups, version control, and human supervision for all usage.
+PECS does not replace engineering judgment.
 
 Do not use PECS-PRO directly on production, safety-critical, financial, medical, or security-sensitive systems.
 Always use:
@@ -39,6 +47,10 @@ PECS-PRO does not replace LLM reasoning.
 The LLM performs reasoning, inference, reconstruction, and ambiguity resolution.
 PECS stabilizes continuity anchors so the LLM can reconstruct state reliably from compact workspace evidence.
 
+PECS stabilizes continuity for AI-assisted development.
+The LLM performs reasoning.
+PECS preserves deterministic continuity anchors.
+
 PECS-PRO v2 is intentionally:
 - deterministic
 - topology-first
@@ -54,6 +66,48 @@ PECS-PRO intentionally avoids:
 - semantic indexing
 - orchestration layers
 - runtime analytics
+
+## Architecture Separation
+
+PECS keeps a strict separation between engine and workspace state:
+
+- PECS engine (this repository):
+	exporters, validators, normalization logic, topology tooling, runtime reinforcement, bridge installers/templates.
+- Workspace continuity state (inside target workspace):
+	`.pecs/` artifacts, continuity snapshots, runtime evidence, and bridge runtime/config.
+
+This separation keeps PECS small, deterministic, and maintainable.
+
+## Context Bridge
+
+The workspace-local context bridge exists only to:
+
+- normalize continuity inputs deterministically
+- compare-before-write
+- suppress no-op rewrites
+- persist stable continuity anchors
+
+The bridge does not:
+
+- act as conversational authority
+- perform semantic summarization
+- orchestrate AI decisions
+- replace LLM reasoning
+
+## Supported AI Tooling
+
+PECS is currently designed and tested primarily for:
+
+- GitHub Copilot Chat
+- Continue
+
+Compatibility note:
+- Other VS Code AI extensions may not preserve compatible continuity/workflow behavior.
+- PECS does not claim universal compatibility across all AI extensions.
+
+PECS continuity is built around deterministic workspace state,
+topology continuity, locality stabilization, and sparse runtime reinforcement.
+It is not a full conversational replay system.
 
 ## What changed in v2 vs v1
 
@@ -93,6 +147,40 @@ PECS minimal continuity works as a small stabilization loop:
 PECS does not perform the reasoning itself.
 
 ## Installation
+
+### Deterministic install and workspace initialization
+
+Use this flow for a new workspace user.
+
+#### macOS/Linux
+
+```bash
+python3 -m pip install pecs-pro
+pecs-pro init "/path/to/workspace"
+```
+
+#### Windows (PowerShell)
+
+```powershell
+py -m pip install pecs-pro
+pecs-pro init "C:\path\to\workspace"
+```
+
+`pecs-pro init` prepares deterministic workspace-local integration and scaffolding:
+
+- `.pecs` structure
+- continuity scaffolding
+- bridge runtime
+- VS Code tasks
+
+### If `pecs-pro` is unavailable on your index
+
+Install from source and run the same initialization flow:
+
+```bash
+python3 -m pip install /path/to/PECS_PRO_V2_FINAL/pecs_pro
+pecs-pro init "/path/to/workspace"
+```
 
 ### Recommended: Install PECS-PRO externally (no workspace contamination)
 
@@ -169,89 +257,110 @@ cd "${workspaceFolder}"
 source .venv/bin/activate
 ```
 
+Bridge/runtime artifacts are installed minimally under:
+
+```text
+.pecs/
+	continuity/
+	runtime/
+	config/
+	bridge/
+```
+
+## Minimal Invocation Flow
+
+You can run PECS as a minimal deterministic flow:
+
+```bash
+pecs-pro init /path/to/your/workspace
+pecs-pro refresh /path/to/your/workspace
+pecs-pro validate /path/to/your/workspace
+```
+
+Equivalent workspace-local bridge invocation:
+
+```bash
+python3 .pecs/bridge/run_bridge.py refresh --workspace /path/to/your/workspace
+python3 .pecs/bridge/run_bridge.py validate --workspace /path/to/your/workspace
+```
+
+PECS favors deterministic continuity stabilization over conversational memory systems.
+The bridge remains intentionally lightweight and non-semantic.
+
+## VS Code Task Workflow
+
+After initialization, PECS tasks become available in VS Code.
+
+Workflow:
+
+- VSCode
+- Terminal
+- Run Task
+- select a PECS task
+
+Expected PECS task names:
+
+- `PECS: Start Daemon`
+- `PECS: Stop Daemon`
+- `PECS: Refresh Continuity State`
+- `PECS: Validate Continuity State`
+- `PECS: Append Chat Event`
+- `PECS: Manual Update Chat History`
+- `PECS: Auto Start Daemon On Folder Open` (optional)
+
+## Daemon Lifecycle (Intentional Manual Control)
+
+The PECS daemon does NOT automatically start from package installation.
+The user manually starts the daemon during active AI-assisted development sessions.
+This is intentional to preserve deterministic and lightweight runtime behavior.
+
+## Bridge Lifecycle
+
+Normal users do NOT need to run the context bridge script directly.
+Use standard PECS refresh flow (`pecs-pro refresh` or `PECS: Refresh Continuity State`).
+Daemon/refresh operational flow is the supported path.
+Bridge execution is handled automatically by the daemon/refresh flow.
+
+The bridge remains:
+
+- lightweight
+- deterministic
+- non-semantic
+
+## No-Op Silence (Expected Behavior)
+
+After stabilization, PECS intentionally becomes mostly silent.
+
+No-op cycles are expected to produce:
+
+- no rewrites
+- no log spam
+- no continuity churn
+
+This is intentional and indicates deterministic steady-state behavior.
+
+## New AI Session Workflow
+
+For a new AI session, provide:
+
+- current task/problem
+- `.pecs` continuity state
+
+Prefer this over large historical chat dumps.
+
+PECS exists to reduce:
+
+- continuity collapse
+- search entropy
+- edit locality ambiguity
+
+Chat-history replay is optional and experimental.
+Deterministic `.pecs` continuity state should be the primary handoff.
+
 ---
 
-### Sample install and launch script (external, safe)
-
-Save as `install_and_run_pecs.sh`:
-
-```bash
-#!/bin/bash
-set -e
-
-# 1. Create a dedicated venv for PECS-PRO (outside your workspace)
-VENV_DIR="$HOME/pecs-pro-venv"
-python3 -m venv "$VENV_DIR"
-source "$VENV_DIR/bin/activate"
-python3 -m pip install --upgrade pip
-
-# 2. Install PECS-PRO from GitHub
-python3 -m pip install git+https://github.com/YOUR_ORG/PECS_PRO_V2_FINAL.git@main
-python3 -m pip install watchdog
-
-# 3. Launch the daemon for your workspace
-pecs-pro-daemon "$1"
-```
-
-Usage:
-
-```bash
-chmod +x install_and_run_pecs.sh
-./install_and_run_pecs.sh /path/to/your/workspace
-```
-
-### Manual setup guide
-
-If you need to install PECS without the installer script, copy these files into the target workspace:
-
-- `.continue/rules/PECS_CONTEXT_RULE.md`
-- `.continue/rules/PECS_APPEND_RULE.md`
-- `.github/copilot-instructions.md`
-- `.pecs/tools/append_ai_chat_history.py`
-- `.pecs/README_WORKSPACE_INTEGRATION.md`
-
-Create these files if they do not exist:
-
-- `.pecs/ai_chat_history.json` with `[]`
-- `.vscode/tasks.json`
-- `.vscode/settings.json`
-
-Minimum manual commands:
-
-```bash
-cd "/path/to/your/workspace"
-python3 -m venv .venv
-source .venv/bin/activate
-python3 -m pip install --upgrade pip
-python3 -m pip install watchdog
-```
-
-Then install PECS itself from the package folder or GitHub source:
-
-```bash
-python3 -m pip install /path/to/PECS_PRO_V2_FINAL/pecs_pro
-```
-
-or:
-
-```bash
-python3 -m pip install git+https://github.com/YOUR_ORG/PECS_PRO_V2_FINAL.git@main
-```
-
-Then start the daemon:
-
-```bash
-pecs-pro-daemon "/path/to/your/workspace"
-```
-
-If you are running from source checkout instead of an installed package, use:
-
-```bash
-PECS_PRO_REPO="/Users/raj/Downloads/PECS_PRO_V2_FINAL/pecs_pro" \
-	/Users/raj/Downloads/PECS_PRO_V2_FINAL/pecs_pro/launch_pecs_daemon.sh "/path/to/your/workspace"
-```
-
----
+For manual setup procedures, see `README_MANUAL_SETUP.md`.
+For optional chat-history workflows, see `README_AI_CHAT_HISTORY.md`.
 
 ## Running the daemon
 

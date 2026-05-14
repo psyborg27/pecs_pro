@@ -1,0 +1,15 @@
+# Runtime evidence
+.pecs/runtime_activation.jsonl
+
+# Generated locality/runtime state
+.pecs/runtime/**
+!.pecs/runtime/.gitkeep
+
+# Volatile continuity exports
+.pecs/continuity/generated/**
+
+# Session artifacts
+.pecs/sessions/**
+
+# Temporary topology projections
+.pecs/tmp/**

@@ -10,6 +10,13 @@ ARTIFACT_DIR = ".pecs"
 CONTINUITY_DIR = ".pecs/continuity"
 ACTIVE_TOPOLOGY_SCHEMA = "pecs.active_topology.v1"
 LOCALITY_STATE_SCHEMA = "pecs.locality_state.v1"
+PRESERVE_EMPTY_KEYS = {
+    "schema",
+    "active_topology_zone",
+    "active_runtime_zones",
+    "runtime_validation",
+    "validation_metrics",
+}
 
 
 def _safe_ratio(numerator: int, denominator: int) -> float:
@@ -275,12 +282,71 @@ def _build_workspace_trajectory(
     return active_topology_zone
 
 
-def _write_json(path: Path, payload: Dict[str, Any]) -> None:
+def _normalize_for_compare(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: _normalize_for_compare(value[key]) for key in sorted(value)}
+    if isinstance(value, list):
+        return [_normalize_for_compare(item) for item in value]
+    if isinstance(value, str):
+        return value.strip()
+    return value
+
+
+def _drop_empty_sections(payload: Dict[str, Any]) -> Dict[str, Any]:
+    cleaned: Dict[str, Any] = {}
+    for key, value in payload.items():
+        if key in PRESERVE_EMPTY_KEYS:
+            cleaned[key] = value
+            continue
+        if value in (None, "", [], {}):
+            continue
+        cleaned[key] = value
+    return cleaned
+
+
+def _write_json(path: Path, payload: Dict[str, Any]) -> bool:
+    normalized_payload = _normalize_for_compare(payload)
+    canonical_new = json.dumps(
+        normalized_payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+    if path.exists():
+        try:
+            existing_payload = json.loads(path.read_text(encoding="utf-8"))
+            canonical_existing = json.dumps(
+                _normalize_for_compare(existing_payload),
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            if canonical_existing == canonical_new:
+                return False
+        except Exception:
+            pass
+
     path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+    return True
 
 
-def _write_markdown(path: Path, lines: List[str]) -> None:
-    path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+def _write_markdown(path: Path, lines: List[str]) -> bool:
+    body = "\n".join(lines).rstrip() + "\n"
+    normalized_new = (
+        "\n".join(line.rstrip() for line in body.splitlines()).rstrip() + "\n"
+    )
+
+    if path.exists():
+        existing = path.read_text(encoding="utf-8")
+        normalized_existing = (
+            "\n".join(line.rstrip() for line in existing.splitlines()).rstrip() + "\n"
+        )
+        if normalized_existing == normalized_new:
+            return False
+
+    path.write_text(body, encoding="utf-8")
+    return True
 
 
 def export_workspace_continuity(workspace_root: Path) -> Dict[str, Any]:
@@ -361,25 +427,29 @@ def export_workspace_continuity(workspace_root: Path) -> Dict[str, Any]:
         )[:20]
     ]
 
-    active_topology_payload = {
-        "schema": ACTIVE_TOPOLOGY_SCHEMA,
-        "active_topology_zone": active_regions["active_topology_zone"],
-        "active_runtime_zones": active_regions["active_runtime_zones"],
-        "workspace_trajectory": workspace_trajectory,
-        "continuity_hotspots": hotspots,
-        "runtime_validation": runtime_validation,
-        "validation_metrics": validation_metrics,
-    }
+    active_topology_payload = _drop_empty_sections(
+        {
+            "schema": ACTIVE_TOPOLOGY_SCHEMA,
+            "active_topology_zone": active_regions["active_topology_zone"],
+            "active_runtime_zones": active_regions["active_runtime_zones"],
+            "workspace_trajectory": workspace_trajectory,
+            "continuity_hotspots": hotspots,
+            "runtime_validation": runtime_validation,
+            "validation_metrics": validation_metrics,
+        }
+    )
 
-    locality_state_payload = {
-        "schema": LOCALITY_STATE_SCHEMA,
-        "active_locality_clusters": recent_edit_clusters[:12],
-        "repeated_edit_clusters": repeated_modifications[:8],
-        "active_runtime_touched_files": runtime_touched_files[:12],
-        "ownership_hotspots": ownership_density[:12],
-        "continuity_hotspots": hotspots[:10],
-        "validation_metrics": validation_metrics,
-    }
+    locality_state_payload = _drop_empty_sections(
+        {
+            "schema": LOCALITY_STATE_SCHEMA,
+            "active_locality_clusters": recent_edit_clusters[:12],
+            "repeated_edit_clusters": repeated_modifications[:8],
+            "active_runtime_touched_files": runtime_touched_files[:12],
+            "ownership_hotspots": ownership_density[:12],
+            "continuity_hotspots": hotspots[:10],
+            "validation_metrics": validation_metrics,
+        }
+    )
 
     unresolved_tensions: List[str] = []
     if not topology_compact:
@@ -414,15 +484,7 @@ def export_workspace_continuity(workspace_root: Path) -> Dict[str, Any]:
 
     _write_markdown(
         continuity_dir / "unresolved_tensions.md",
-        [
-            "# Unresolved Tensions",
-            "",
-            *(
-                [f"- {item}" for item in unresolved_tensions]
-                if unresolved_tensions
-                else ["- no unresolved tensions detected"]
-            ),
-        ],
+        ["# Unresolved Tensions", "", *[f"- {item}" for item in unresolved_tensions]],
     )
 
     focus_lines = [
@@ -432,30 +494,19 @@ def export_workspace_continuity(workspace_root: Path) -> Dict[str, Any]:
         f"- Workspace trajectory: {workspace_trajectory}",
         f"- Runtime evidence count: {runtime_validation['runtime_evidence_count']}",
         f"- Runtime confirmation density: {runtime_validation['runtime_confirmation_density']}",
-        "",
-        "## Active Locality Clusters",
     ]
 
     if recent_edit_clusters:
+        focus_lines.extend(["", "## Active Locality Clusters"])
         for cluster in recent_edit_clusters[:5]:
             focus_lines.append(f"- {cluster['cluster']} (count={cluster['count']})")
-    else:
-        focus_lines.append("- none")
-
-    focus_lines.extend(
-        [
-            "",
-            "## Continuity Hotspots",
-        ]
-    )
 
     if hotspots:
+        focus_lines.extend(["", "## Continuity Hotspots"])
         for item in hotspots[:10]:
             focus_lines.append(
                 f"- {item['id']} (score={item['score']}, signals={','.join(item['signals'])})"
             )
-    else:
-        focus_lines.append("- none")
 
     _write_markdown(continuity_dir / "current_workspace_focus.md", focus_lines)
 
@@ -476,12 +527,19 @@ def main() -> None:
     parser.add_argument(
         "workspace_root",
         nargs="?",
-        default=".",
+        default=None,
         help="Workspace root containing .pecs artifacts (default: current directory).",
+    )
+    parser.add_argument(
+        "--workspace",
+        dest="workspace_flag",
+        default=None,
+        help="Workspace root containing .pecs artifacts.",
     )
     args = parser.parse_args()
 
-    workspace_root = Path(args.workspace_root).resolve()
+    workspace_value = args.workspace_flag or args.workspace_root or "."
+    workspace_root = Path(workspace_value).resolve()
     result = export_workspace_continuity(workspace_root)
     print(json.dumps(result, indent=2, sort_keys=True))
 

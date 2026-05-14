@@ -1,0 +1,19 @@
+{
+  "active_runtime_zones": [],
+  "active_topology_zone": "general_runtime",
+  "runtime_validation": {
+    "active_topology_targeting": 0.0,
+    "runtime_confirmation_density": 0.0,
+    "runtime_confirmations": 0,
+    "runtime_evidence_count": 0
+  },
+  "schema": "pecs.active_topology.v1",
+  "validation_metrics": {
+    "active_topology_targeting": 0.0,
+    "continuity_compression_effectiveness": 0.0,
+    "continuity_hotspot_identification": 0.0,
+    "edit_locality_improvement": 0.0,
+    "runtime_confirmation_density": 0.0
+  },
+  "workspace_trajectory": "general_runtime"
+}
