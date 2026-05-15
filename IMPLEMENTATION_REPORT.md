@@ -1,3 +1,69 @@
+# PECS OPERATIONAL INSTALLATION HARDENING — MAY 2026
+
+## Overview
+This section documents all operational hardening changes made to PECS to ensure stable, persistent installation, runtime dependency guarantees, install-root safety, and improved onboarding as PECS transitions to persistent developer infrastructure.
+
+## Files Touched
+- install_pecs_workspace.sh
+- install_workspace_integration.py
+- launch_pecs_daemon.sh
+- scripts/pecs_health_check.py (added)
+- README.md
+- README_MANUAL_SETUP.md
+
+## Methods Added
+- is_unstable_root
+- validate_dependencies
+- install_missing_dependencies
+- print_install_root_guidance
+- health_check
+- _get_central_python
+
+## Methods Modified
+- main (install_workspace_integration.py)
+- _merge_tasks (install_workspace_integration.py)
+
+## Methods Removed
+- None
+
+## Dependency Guarantee Changes
+- All installers and launch scripts now verify and install required runtime dependencies (e.g., watchdog) before daemon launch.
+- Explicit dependency validation and health check commands added.
+- `launch_pecs_daemon.sh` now runs PECS health checks using the central PECS venv runtime.
+
+## Install Root Safety Changes
+- All installers and launch scripts now warn if PECS is installed or launched from unstable locations (Downloads, Desktop, temp, removable/external volumes).
+- README and manual setup guide updated with persistent install root guidance.
+- Launcher prints explicit install root and target workspace diagnostics on startup.
+
+## Installer Hardening Changes
+- Installers fail clearly if dependencies are missing or install root is unstable.
+- Health check script and CLI options added for explicit validation.
+
+## First-Run Experience Changes
+- Onboarding now includes clear diagnostics for missing dependencies, unstable install roots, and daemon viability.
+- Health check script provides actionable output for new users.
+
+## Validation Results
+- Health check script validates:
+   - Install root stability
+   - Dependency availability
+   - Daemon launch script presence
+   - Workspace existence
+- Launch script blocks daemon start if health check fails.
+
+## Before/After Install Flow
+
+### Before
+- No explicit dependency or install-root validation.
+- Daemon could fail silently or with raw tracebacks if dependencies missing.
+- Users could install/run from Downloads or temp folders without warning.
+
+### After
+- Installers and launch scripts validate dependencies and install root before proceeding.
+- Health check script and CLI options provide explicit diagnostics.
+- Users are warned and blocked from running in unstable locations.
+- Onboarding and documentation guide users to persistent, safe install roots.
 # PECS Workspace Ingress Infrastructure — Implementation Complete
 
 ## Executive Summary

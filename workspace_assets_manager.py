@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import shutil
 from datetime import datetime
 from pathlib import Path
@@ -217,11 +218,18 @@ class WorkspaceAssetsManager:
 
         elif strategy == "merge_yaml":
             if target.exists() and upgrade:
-                source_data = json.loads(
-                    source.read_text(encoding="utf-8")
-                    .replace(".yaml", ".json")
-                    .replace("YAML", "JSON")
-                )
+                try:
+                    source_data = json.loads(
+                        source.read_text(encoding="utf-8")
+                        .replace(".yaml", ".json")
+                        .replace("YAML", "JSON")
+                    )
+                except json.JSONDecodeError:
+                    logger.warning(
+                        f"Unable to parse YAML merge source for asset {asset_id}; preserving existing target"
+                    )
+                    return
+
                 try:
                     target_data = json.loads(target.read_text(encoding="utf-8"))
                 except json.JSONDecodeError:
@@ -310,7 +318,55 @@ class WorkspaceAssetsManager:
                 result["valid"] = False
                 logger.error(f"Missing daemon directory: {daemon_dir}")
 
+        self._verify_install_root_references(result)
         return result
+
+    def _verify_install_root_references(self, result: Dict[str, Any]) -> None:
+        """Verify workspace asset references point to the current PECS install root."""
+        install_root_config = self.workspace_root / ".pecs" / "config" / "install_root.json"
+        if install_root_config.exists():
+            try:
+                config = json.loads(install_root_config.read_text(encoding="utf-8"))
+                install_root = Path(config.get("install_root", ""))
+                if install_root.exists():
+                    install_root = install_root.resolve()
+                    if install_root != self.repo_root:
+                        result["errors"].append(
+                            "Workspace install root is stale: install_root.json points to a different PECS root"
+                        )
+                        result["valid"] = False
+                else:
+                    result["errors"].append(
+                        "Workspace install root config references a missing PECS install root"
+                    )
+                    result["valid"] = False
+            except Exception:
+                result["errors"].append(
+                    "Workspace install root config is invalid or unreadable"
+                )
+                result["valid"] = False
+        else:
+            result["errors"].append(
+                "Workspace install root config missing: .pecs/config/install_root.json"
+            )
+            result["valid"] = False
+
+        tasks_path = self.workspace_root / ".vscode" / "tasks.json"
+        if tasks_path.exists():
+            task_data = tasks_path.read_text(encoding="utf-8")
+            matches = re.findall(r'PECS_PRO_REPO="([^"]+)"', task_data)
+            for match in matches:
+                try:
+                    referenced_root = Path(match).resolve()
+                    if referenced_root != self.repo_root:
+                        result["errors"].append(
+                            f"Stale PECS install root reference in tasks: {referenced_root}"
+                        )
+                        result["valid"] = False
+                except Exception:
+                    result["warnings"].append(
+                        f"Could not resolve referenced PECS root in tasks: {match}"
+                    )
 
     def repair_installation(self) -> Dict[str, Any]:
         """Repair broken PECS workspace installation."""

@@ -763,6 +763,14 @@ python3 .pecs/bridge/run_bridge.py "$COMMAND" --workspace "$WORKSPACE_ROOT"
             "active_engineering_chains": [],
             "updated_at": "",
         },
+        "continuity_hydration_report.json": {
+            "schema": "pecs.continuity_hydration_report.v1",
+            "generated_at": "",
+            "chain_count": 0,
+            "source_counts": {},
+            "merged_client_count": 0,
+            "note": "Structured engineering continuity hydration report.",
+        },
     }
 
     for file_name, payload in continuity_scaffold.items():
@@ -845,6 +853,7 @@ Installed items:
 - .pecs/bridge/validate_workspace_continuity.py
 - .pecs/config/continuity_bridge.json
 - .pecs/continuity/engineering_continuity_state.json
+- .pecs/continuity/continuity_hydration_report.json
 - .pecs/README_MANUAL_SETUP.md
 
 PECS v2 Process Flow:

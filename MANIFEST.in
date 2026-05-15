@@ -1,6 +1,7 @@
 include README.md
 include README_AI_CHAT_HISTORY.md
 include README_MANUAL_SETUP.md
+include requirements.txt
 include pecs_pro_v_2_e_15_architecture_and_module_reference.md
 
 recursive-include workspace_assets *

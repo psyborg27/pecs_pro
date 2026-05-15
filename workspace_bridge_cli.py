@@ -905,6 +905,18 @@ def main() -> None:
     )
     refresh_parser.set_defaults(func=_cmd_refresh_workspace)
 
+    hydrate_parser = subparsers.add_parser(
+        "hydrate-workspace",
+        help="Hydrate workspace continuity from chat history and runtime artifacts",
+    )
+    hydrate_parser.add_argument("workspace_root", help="Target workspace root path")
+    hydrate_parser.add_argument(
+        "--repo-root",
+        default="",
+        help="PECS repository root",
+    )
+    hydrate_parser.set_defaults(func=_cmd_refresh_workspace)
+
     # Legacy validate command
     validate_parser = subparsers.add_parser(
         "validate", help="Validate continuity state"

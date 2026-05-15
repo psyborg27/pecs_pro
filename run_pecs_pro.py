@@ -4,44 +4,44 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict
 
-from .continuity.registry.continuity_registry import (
+from continuity.registry.continuity_registry import (
     ContinuityRegistry,
 )
-from .continuity.registry.runtime_registry import (
+from continuity.registry.runtime_registry import (
     RuntimeRegistry,
 )
 
-from .execution_graph.indexes.graph_index import (
+from execution_graph.indexes.graph_index import (
     GraphIndex,
 )
-from .execution_graph.indexes.execution_index import (
+from execution_graph.indexes.execution_index import (
     ExecutionIndex,
 )
-from .execution_graph.indexes.ownership_index import (
+from execution_graph.indexes.ownership_index import (
     OwnershipIndex,
 )
 
-from .topology.indexing.locality_index import (
+from topology.indexing.locality_index import (
     LocalityIndex,
 )
 
-from .topology.scoring.continuity_score_engine import (
+from topology.scoring.continuity_score_engine import (
     ContinuityScoreEngine,
 )
 
-from .topology.retrieval.topology_retriever import (
+from topology.retrieval.topology_retriever import (
     TopologyRetriever,
 )
 
-from .topology.incremental.incremental_topology_updater import (
+from topology.incremental.incremental_topology_updater import (
     IncrementalTopologyUpdater,
 )
 
-from .runtime.session.workspace_runtime_session import (
+from runtime.session.workspace_runtime_session import (
     WorkspaceRuntimeSession,
 )
 
-from .topology.compaction.compact_context_builder import (
+from topology.compaction.compact_context_builder import (
     CompactContextBuilder,
 )
 

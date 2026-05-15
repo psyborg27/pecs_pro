@@ -3,8 +3,8 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from pecs_pro.run_pecs_pro import PECSProRuntime
-from pecs_pro.runtime.daemon import WorkspaceContinuityDaemon
+from run_pecs_pro import PECSProRuntime
+from runtime.daemon import WorkspaceContinuityDaemon
 
 
 def main() -> None:

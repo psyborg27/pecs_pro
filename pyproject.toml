@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=65.0"]
+requires = ["setuptools>=65.0", "wheel>=0.40.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -11,6 +11,9 @@ authors = [
 ]
 readme = "README.md"
 requires-python = ">=3.9"
+dependencies = [
+  "watchdog>=3.0.0,<4.0.0",
+]
 
 [project.urls]
 Home = "https://example.com/pecs_pro"
@@ -20,6 +23,19 @@ pecs = "workspace_bridge_cli:main"
 pecs-pro = "workspace_bridge_cli:main"
 pecs-pro-daemon = "run_pecs_daemon:main"
 pecs-pro-install-workspace = "install_workspace_integration:main"
+
+[tool.setuptools]
+packages = {find = {where = ["."], include = ["pecs_pro", "continuity*", "execution_graph*", "exports*", "integrations*", "runtime*", "topology*", "validation*", "workspace_assets*"]}}
+py-modules = [
+  "append_ai_chat_history",
+  "install_workspace_integration",
+  "run_pecs_daemon",
+  "run_pecs_lite_v2_daemon",
+  "run_pecs_pro",
+  "workspace_assets_manager",
+  "workspace_bridge_cli",
+]
+include-package-data = true
 
 [tool.setuptools.package-data]
 pecs_pro = [
