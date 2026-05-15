@@ -262,7 +262,7 @@ def _merge_tasks(tasks_path: Path, repo_root: Path) -> None:
         "type": "shell",
         "command": (
             'bash -lc \'cd "${workspaceFolder}" '
-            '&& bash .pecs/bridge/run_bridge.sh refresh\''
+            '&& bash .pecs/bridge/run_bridge.sh "${workspaceFolder}" refresh\''
         ),
     }
 
@@ -271,7 +271,7 @@ def _merge_tasks(tasks_path: Path, repo_root: Path) -> None:
         "type": "shell",
         "command": (
             'bash -lc \'cd "${workspaceFolder}" '
-            '&& bash .pecs/bridge/run_bridge.sh validate\''
+            '&& bash .pecs/bridge/run_bridge.sh "${workspaceFolder}" validate\''
         ),
     }
 
@@ -704,6 +704,11 @@ fi
 
 if [[ -n "$INSTALL_ROOT" && -f "$INSTALL_ROOT/.venv/bin/activate" ]]; then
   source "$INSTALL_ROOT/.venv/bin/activate"
+fi
+
+if [[ "$WORKSPACE_ROOT" == "refresh" || "$WORKSPACE_ROOT" == "validate" ]]; then
+    COMMAND="$WORKSPACE_ROOT"
+    WORKSPACE_ROOT="$(pwd)"
 fi
 
 cd "$WORKSPACE_ROOT"

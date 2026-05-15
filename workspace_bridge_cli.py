@@ -1,14 +1,23 @@
 from __future__ import annotations
 
 import argparse
+import importlib.metadata
 import json
 import logging
+import os
+import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
-from install_workspace_integration import install_workspace
-from workspace_assets_manager import WorkspaceAssetsManager
+from pecs_pro.install_workspace_integration import (
+    install_workspace,
+    print_install_root_guidance,
+    read_registered_workspaces,
+    validate_dependencies,
+)
+from pecs_pro.workspace_assets_manager import WorkspaceAssetsManager
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +38,61 @@ def _run_workspace_bridge(workspace_root: Path, command: str) -> None:
             str(workspace_root),
         ],
         check=True,
+    )
+
+
+def _is_process_running(pid: int) -> bool:
+    try:
+        subprocess.run(["kill", "-0", str(pid)], check=True, capture_output=True)
+        return True
+    except Exception:
+        return False
+
+
+def _start_workspace_daemon(workspace_root: Path) -> None:
+    daemon_script = workspace_root / ".pecs" / "run_pecs_daemon.sh"
+    if not daemon_script.exists():
+        raise FileNotFoundError(
+            f"Workspace daemon launcher missing: {daemon_script}. Run install-workspace-assets or bootstrap-workspace first."
+        )
+
+    pid_file = workspace_root / ".pecs" / "daemon.pid"
+    if pid_file.exists():
+        try:
+            pid = int(pid_file.read_text(encoding="utf-8").strip())
+            if _is_process_running(pid):
+                logger.info(f"Daemon already running (PID {pid})")
+                return
+            logger.warning("Stale daemon PID file found. Removing and restarting daemon.")
+            pid_file.unlink(missing_ok=True)
+        except Exception:
+            pid_file.unlink(missing_ok=True)
+
+    bash_path = shutil.which("bash")
+    if not bash_path:
+        raise RuntimeError("Cannot start daemon: bash is not available on PATH.")
+
+    logger.info(f"Starting workspace daemon for {workspace_root}")
+    subprocess.Popen(
+        [bash_path, str(daemon_script), str(workspace_root)],
+        cwd=str(workspace_root),
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+
+    time.sleep(2)
+    if pid_file.exists():
+        try:
+            pid = int(pid_file.read_text(encoding="utf-8").strip())
+            if _is_process_running(pid):
+                logger.info(f"Daemon started successfully (PID {pid})")
+                return
+        except Exception:
+            pass
+    logger.warning(
+        "Daemon launch requested, but PID file was not written within startup window. "
+        "Check .pecs/daemon.pid and workspace logs if startup failed."
     )
 
 
@@ -89,7 +153,7 @@ def _cmd_install_workspace_assets(args: argparse.Namespace) -> None:
 
     try:
         manager = WorkspaceAssetsManager(repo_root, workspace_root)
-        result = manager.install_assets(upgrade=args.upgrade, verify=True)
+        result = manager.install_assets(upgrade=args.upgrade, verify=False)
 
         logger.info(f"Status: {result['status']}")
         logger.info(f"Installed: {len(result.get('installed_assets', []))} asset(s)")
@@ -102,11 +166,183 @@ def _cmd_install_workspace_assets(args: argparse.Namespace) -> None:
         logger.info("Applying PECS workspace integration configuration")
         install_workspace(workspace_root, repo_root)
 
-        logger.info("Workspace assets installed successfully")
+        verification = manager.verify_installation()
+        if not verification["valid"]:
+            logger.error("Workspace verification failed after installation")
+            for error in verification.get("errors", []):
+                logger.error(f"  - {error}")
+            sys.exit(1)
 
+        logger.info("Workspace assets installed successfully")
     except Exception as e:
         logger.error(f"Asset installation failed: {e}")
         sys.exit(1)
+
+
+def _cmd_bootstrap_workspace(args: argparse.Namespace) -> None:
+    """Bootstrap a workspace end-to-end: install assets, start daemon, refresh continuity, and validate."""
+    workspace_root = Path(args.workspace_root).resolve()
+    repo_root = (
+        Path(args.repo_root).resolve()
+        if args.repo_root
+        else Path(__file__).resolve().parent
+    )
+
+    if not workspace_root.exists():
+        logger.error(f"Workspace does not exist: {workspace_root}")
+        sys.exit(1)
+
+    print_install_root_guidance(repo_root)
+    missing = [dep for dep, status in validate_dependencies().items() if status != "ok"]
+    if missing:
+        logger.error(
+            f"Missing required dependencies: {missing}. "
+            "Activate the PECS repo venv and install requirements before bootstrapping."
+        )
+        sys.exit(1)
+
+    try:
+        manager = WorkspaceAssetsManager(repo_root, workspace_root)
+        result = manager.install_assets(upgrade=args.upgrade, verify=False)
+
+        logger.info(f"Status: {result['status']}")
+        logger.info(f"Installed: {len(result.get('installed_assets', []))} asset(s)")
+
+        if result.get("errors"):
+            for error in result["errors"]:
+                logger.error(f"  - {error}")
+            sys.exit(1)
+
+        logger.info("Applying PECS workspace integration configuration")
+        install_workspace(workspace_root, repo_root)
+        _start_workspace_daemon(workspace_root)
+        _run_workspace_bridge(workspace_root, "refresh")
+
+        verification = manager.verify_installation()
+        if not verification["valid"]:
+            logger.error("Workspace verification failed after bootstrap")
+            for error in verification.get("errors", []):
+                logger.error(f"  - {error}")
+            sys.exit(1)
+
+        logger.info("Workspace bootstrap completed successfully")
+    except Exception as e:
+        logger.error(f"Workspace bootstrap failed: {e}")
+        sys.exit(1)
+
+
+def _cmd_interactive_setup(args: argparse.Namespace) -> None:
+    """Interactively configure and bootstrap a workspace."""
+    repo_root = (
+        Path(args.repo_root).resolve()
+        if args.repo_root
+        else Path(__file__).resolve().parent
+    )
+
+    workspace_root = None
+    if args.workspace_root:
+        workspace_root = Path(args.workspace_root).resolve()
+    else:
+        user_input = input("Enter the target workspace root path: ").strip()
+        if user_input:
+            workspace_root = Path(user_input).resolve()
+
+    if not workspace_root:
+        logger.error("Workspace root is required for interactive setup.")
+        sys.exit(1)
+
+    if not workspace_root.exists():
+        logger.error(f"Workspace does not exist: {workspace_root}")
+        sys.exit(1)
+
+    logger.info(f"Interactive workspace bootstrap: {workspace_root}")
+    inner_args = argparse.Namespace(
+        workspace_root=str(workspace_root),
+        repo_root=str(repo_root),
+        upgrade=args.upgrade,
+    )
+    _cmd_bootstrap_workspace(inner_args)
+
+
+def _cmd_rebind_workspace(args: argparse.Namespace) -> None:
+    """Rebind workspace integration to the current PECS install root."""
+    workspace_root = Path(args.workspace_root).resolve()
+    repo_root = (
+        Path(args.repo_root).resolve()
+        if args.repo_root
+        else Path(__file__).resolve().parent
+    )
+
+    if not workspace_root.exists():
+        logger.error(f"Workspace does not exist: {workspace_root}")
+        sys.exit(1)
+
+    try:
+        manager = WorkspaceAssetsManager(repo_root, workspace_root)
+        result = manager.install_assets(upgrade=args.upgrade, verify=False)
+
+        if result.get("errors"):
+            logger.error("Workspace rebind encountered errors:")
+            for error in result["errors"]:
+                logger.error(f"  - {error}")
+            sys.exit(1)
+
+        install_workspace(workspace_root, repo_root)
+        verification = manager.verify_installation()
+        if not verification["valid"]:
+            logger.error("Workspace verification failed after rebind")
+            for error in verification.get("errors", []):
+                logger.error(f"  - {error}")
+            sys.exit(1)
+
+        _run_workspace_bridge(workspace_root, "refresh")
+        logger.info("Workspace rebind completed successfully")
+    except Exception as e:
+        logger.error(f"Workspace rebind failed: {e}")
+        sys.exit(1)
+
+
+def _cmd_migrate_workspace(args: argparse.Namespace) -> None:
+    """Migrate a workspace by regenerating bindings and refresh bridge paths."""
+    _cmd_rebind_workspace(args)
+
+
+def _cmd_rebind_all_workspaces(args: argparse.Namespace) -> None:
+    """Rebind all registered PECS workspaces to the current install root."""
+    repo_root = (
+        Path(args.repo_root).resolve()
+        if args.repo_root
+        else Path(__file__).resolve().parent
+    )
+
+    workspace_paths = read_registered_workspaces(repo_root)
+    if not workspace_paths:
+        logger.error("No registered workspaces found to rebind.")
+        sys.exit(1)
+
+    failures = []
+    for workspace_root in workspace_paths:
+        try:
+            logger.info(f"Rebinding workspace: {workspace_root}")
+            inner_args = argparse.Namespace(
+                workspace_root=str(workspace_root),
+                repo_root=str(repo_root),
+                upgrade=args.upgrade,
+            )
+            _cmd_rebind_workspace(inner_args)
+            logger.info(f"Successfully rebound: {workspace_root}")
+        except SystemExit as e:
+            if e.code != 0:
+                failures.append((workspace_root, e.code))
+        except Exception as e:
+            failures.append((workspace_root, str(e)))
+
+    if failures:
+        logger.error("Some workspaces failed to rebind:")
+        for workspace_root, reason in failures:
+            logger.error(f"  - {workspace_root}: {reason}")
+        sys.exit(1)
+    logger.info("Rebind-all-workspaces completed successfully.")
 
 
 def _cmd_verify_workspace(args: argparse.Namespace) -> None:
@@ -216,6 +452,38 @@ def _cmd_status(args: argparse.Namespace) -> None:
         sys.exit(1)
 
 
+def _cmd_refresh_workspace(args: argparse.Namespace) -> None:
+    """Refresh continuity state using the workspace bridge."""
+    workspace_root = Path(args.workspace_root).resolve()
+
+    if not workspace_root.exists():
+        logger.error(f"Workspace does not exist: {workspace_root}")
+        sys.exit(1)
+
+    try:
+        _run_workspace_bridge(workspace_root, "refresh")
+        logger.info(f"Continuity refresh completed: {workspace_root}")
+    except Exception as e:
+        logger.error(f"Continuity refresh failed: {e}")
+        sys.exit(1)
+
+
+def _cmd_validate_workspace(args: argparse.Namespace) -> None:
+    """Validate continuity state using the workspace bridge."""
+    workspace_root = Path(args.workspace_root).resolve()
+
+    if not workspace_root.exists():
+        logger.error(f"Workspace does not exist: {workspace_root}")
+        sys.exit(1)
+
+    try:
+        _run_workspace_bridge(workspace_root, "validate")
+        logger.info(f"Continuity validation completed: {workspace_root}")
+    except Exception as e:
+        logger.error(f"Continuity validation failed: {e}")
+        sys.exit(1)
+
+
 def _cmd_doctor(args: argparse.Namespace) -> None:
     """Diagnose PECS installation and environment."""
     workspace_root = (
@@ -246,6 +514,8 @@ def _cmd_doctor(args: argparse.Namespace) -> None:
             ".pecs/README.md",
             ".pecs/tools/append_ai_chat_history.py",
             ".pecs/bridge/run_bridge.py",
+            ".pecs/bridge/run_bridge.sh",
+            ".pecs/run_pecs_daemon.sh",
             ".github/copilot-instructions.md",
             ".continue/rules/pecs-first-routing.yaml",
             ".vscode/tasks.json",
@@ -279,6 +549,59 @@ def _cmd_doctor(args: argparse.Namespace) -> None:
             logger.info(f"  ✓ Found: {venv_path}")
         else:
             logger.info("  - Not found (optional)")
+
+        # Check installation and entrypoints
+        logger.info("\nPECS Environment:")
+        try:
+            dist = importlib.metadata.distribution("pecs_pro")
+            logger.info(f"  ✓ Installed distribution: {dist.metadata['Name']}")
+            console_scripts = [
+                ep for ep in dist.entry_points if ep.group == "console_scripts"
+            ]
+            for ep in console_scripts:
+                logger.info(f"    - console script: {ep.name} -> {ep.value}")
+        except importlib.metadata.PackageNotFoundError:
+            logger.info("  ✗ Installed distribution 'pecs_pro' not found")
+
+        pecs_path = shutil.which("pecs")
+        if pecs_path:
+            logger.info(f"  ✓ 'pecs' entrypoint found: {pecs_path}")
+        else:
+            logger.info("  ✗ 'pecs' entrypoint missing from PATH")
+
+        install_root_config = workspace_root / ".pecs" / "config" / "install_root.json"
+        if install_root_config.exists():
+            try:
+                config = json.loads(install_root_config.read_text(encoding="utf-8"))
+                install_root = Path(config.get("install_root", "")).resolve()
+                if install_root == repo_root:
+                    logger.info(
+                        f"  ✓ Workspace is bound to current PECS install root: {install_root}"
+                    )
+                else:
+                    logger.info(
+                        f"  ✗ Workspace is bound to stale PECS install root: {install_root}"
+                    )
+            except Exception:
+                logger.info(
+                    "  ✗ Workspace install root config is invalid: .pecs/config/install_root.json"
+                )
+        else:
+            logger.info(
+                "  ✗ Workspace install root config missing: .pecs/config/install_root.json"
+            )
+
+        repo_venv = Path(__file__).resolve().parent / ".venv"
+        if (
+            repo_venv.exists()
+            and Path(sys.executable).resolve() == repo_venv / "bin" / "python"
+        ):
+            logger.info("  ✓ Running from repository venv Python")
+        else:
+            logger.info(
+                "  - Current Python is not the repository venv Python; "
+                "editable install recovery may require activating .venv"
+            )
 
         # Continuity health checks
         logger.info("\nContinuity Health:")
@@ -392,6 +715,129 @@ def main() -> None:
     )
     install_parser.set_defaults(func=_cmd_install_workspace_assets)
 
+    bootstrap_parser = subparsers.add_parser(
+        "bootstrap-workspace",
+        help="Install, start daemon, refresh continuity, and validate a workspace",
+    )
+    bootstrap_parser.add_argument("workspace_root", help="Target workspace root path")
+    bootstrap_parser.add_argument(
+        "--repo-root",
+        default="",
+        help="PECS repository root",
+    )
+    bootstrap_parser.add_argument(
+        "--upgrade",
+        action="store_true",
+        help="Preserve existing user configuration",
+    )
+    bootstrap_parser.set_defaults(func=_cmd_bootstrap_workspace)
+
+    setup_parser = subparsers.add_parser(
+        "setup-workspace",
+        help="Alias for bootstrap-workspace",
+    )
+    setup_parser.add_argument("workspace_root", help="Target workspace root path")
+    setup_parser.add_argument(
+        "--repo-root",
+        default="",
+        help="PECS repository root",
+    )
+    setup_parser.add_argument(
+        "--upgrade",
+        action="store_true",
+        help="Preserve existing user configuration",
+    )
+    setup_parser.set_defaults(func=_cmd_bootstrap_workspace)
+
+    interactive_parser = subparsers.add_parser(
+        "interactive-setup",
+        help="Interactively configure and bootstrap a workspace",
+    )
+    interactive_parser.add_argument(
+        "workspace_root",
+        nargs="?",
+        default="",
+        help="Target workspace root path",
+    )
+    interactive_parser.add_argument(
+        "--repo-root",
+        default="",
+        help="PECS repository root",
+    )
+    interactive_parser.add_argument(
+        "--upgrade",
+        action="store_true",
+        help="Preserve existing user configuration",
+    )
+    interactive_parser.set_defaults(func=_cmd_interactive_setup)
+
+    rebind_parser = subparsers.add_parser(
+        "rebind-workspace",
+        help="Refresh PECS workspace bindings after install root relocation",
+    )
+    rebind_parser.add_argument("workspace_root", help="Target workspace root path")
+    rebind_parser.add_argument(
+        "--repo-root",
+        default="",
+        help="PECS repository root",
+    )
+    rebind_parser.add_argument(
+        "--upgrade",
+        action="store_true",
+        help="Preserve existing user configuration",
+    )
+    rebind_parser.set_defaults(func=_cmd_rebind_workspace)
+
+    refresh_bindings_parser = subparsers.add_parser(
+        "refresh-workspace-bindings",
+        help="Alias for rebind-workspace",
+    )
+    refresh_bindings_parser.add_argument("workspace_root", help="Target workspace root path")
+    refresh_bindings_parser.add_argument(
+        "--repo-root",
+        default="",
+        help="PECS repository root",
+    )
+    refresh_bindings_parser.add_argument(
+        "--upgrade",
+        action="store_true",
+        help="Preserve existing user configuration",
+    )
+    refresh_bindings_parser.set_defaults(func=_cmd_rebind_workspace)
+
+    migrate_parser = subparsers.add_parser(
+        "migrate-workspace",
+        help="Migrate workspace bindings to current PECS install root",
+    )
+    migrate_parser.add_argument("workspace_root", help="Target workspace root path")
+    migrate_parser.add_argument(
+        "--repo-root",
+        default="",
+        help="PECS repository root",
+    )
+    migrate_parser.add_argument(
+        "--upgrade",
+        action="store_true",
+        help="Preserve existing user configuration",
+    )
+    migrate_parser.set_defaults(func=_cmd_migrate_workspace)
+
+    rebind_all_parser = subparsers.add_parser(
+        "rebind-all-workspaces",
+        help="Rebind all registered PECS workspaces to current install root",
+    )
+    rebind_all_parser.add_argument(
+        "--repo-root",
+        default="",
+        help="PECS repository root",
+    )
+    rebind_all_parser.add_argument(
+        "--upgrade",
+        action="store_true",
+        help="Preserve existing user configuration",
+    )
+    rebind_all_parser.set_defaults(func=_cmd_rebind_all_workspaces)
+
     verify_parser = subparsers.add_parser(
         "verify-workspace", help="Verify workspace installation"
     )
@@ -448,7 +894,8 @@ def main() -> None:
 
     # Legacy refresh command
     refresh_parser = subparsers.add_parser(
-        "refresh", help="Refresh continuity state (legacy)"
+        "refresh",
+        help="Refresh continuity state (continuity bootstrap)",
     )
     refresh_parser.add_argument("workspace_root", help="Target workspace root path")
     refresh_parser.add_argument(
@@ -456,11 +903,11 @@ def main() -> None:
         default="",
         help="PECS repository root",
     )
-    refresh_parser.set_defaults(func=lambda args: _cmd_init(args))
+    refresh_parser.set_defaults(func=_cmd_refresh_workspace)
 
     # Legacy validate command
     validate_parser = subparsers.add_parser(
-        "validate", help="Validate continuity (legacy)"
+        "validate", help="Validate continuity state"
     )
     validate_parser.add_argument("workspace_root", help="Target workspace root path")
     validate_parser.add_argument(
@@ -468,7 +915,7 @@ def main() -> None:
         default="",
         help="PECS repository root",
     )
-    validate_parser.set_defaults(func=lambda args: _cmd_init(args))
+    validate_parser.set_defaults(func=_cmd_validate_workspace)
 
     args = parser.parse_args()
 
