@@ -10,25 +10,51 @@ Dynamic: requires-python
 
 # PECS-PRO
 
-## IMPORTANT WARNING
+## IMPORTANT DISCLAIMER
 
-PECS-PRO is experimental prototype software.
-It is provided "AS IS" with no warranties or guarantees.
+THIS DIRECTORY IS GENERATED CONTINUITY INFRASTRUCTURE.
+DO NOT EDIT.
+DO NOT PATCH.
+DO NOT TREAT AS ENGINEERING SOURCECODE.
 
-Do not use PECS-PRO directly on production, safety-critical, financial, medical, or security-sensitive systems.
-Always use:
-- isolated test workspaces
-- cloned repositories
-- version control
-- backups
-- human supervision
+THIS FILE DOES NOT CONTAIN SOURCECODE.
+IT ONLY CONTAINS:
+- ENGINEERING TARGET LOCATIONS
+- EXECUTION LOCALITY
+- CONTINUITY RELATIONSHIPS
+- RUNTIME TOPOLOGY
 
-PECS may:
-- misclassify locality
-- infer incorrect continuity
-- generate incomplete retrieval state
-- produce unstable context bundles
-- damage workspace assumptions
+ENGINEERING TRUTH EXISTS ONLY IN:
+WORKSPACE RUNTIME MODULES.
+
+PECS artifacts are queryable continuity infrastructure only.
+PECS is NOT editable engineering sourcecode.
+Use `.pecs` for locality retrieval, then edit runtime workspace modules.
+
+## QUICK INSTALL
+
+Commands required to install PECS into workspace:
+
+```bash
+# From PECS-PRO repository root
+source .venv/bin/activate
+pip install -e . --force-reinstall --no-deps
+
+# Install and integrate into the target workspace
+pecs install-workspace-assets "/Users/raj/Downloads/auto OCR app/"
+
+# Open the workspace in VS Code and let the auto-start task launch the daemon
+# Or manually verify and start the daemon
+pecs status
+pecs verify-workspace "/Users/raj/Downloads/auto OCR app/"
+```
+
+VS Code tasks:
+- `PECS: Start Daemon`
+- `PECS: Stop Daemon`
+- `PECS: Refresh Continuity State`
+- `PECS: Validate Continuity State`
+- `PECS: Append Chat Event`
 
 ## Requirements
 
@@ -38,12 +64,20 @@ PECS may:
 
 ## What PECS-PRO v2 does
 
-PECS-PRO v2 is a continuity cache and topology-aware context builder.
+PECS-PRO v2 is a continuity stabilization system and topology-aware context builder.
 It is designed to preserve:
 - topology-local continuity
 - object locality
 - ownership continuity
 - execution continuity
+
+PECS-PRO does not replace LLM reasoning.
+The LLM performs reasoning, inference, reconstruction, and ambiguity resolution.
+PECS stabilizes continuity anchors so the LLM can reconstruct state reliably from compact workspace evidence.
+
+PECS stabilizes continuity for AI-assisted development.
+The LLM performs reasoning.
+PECS preserves deterministic continuity anchors.
 
 PECS-PRO v2 is intentionally:
 - deterministic
@@ -52,6 +86,56 @@ PECS-PRO v2 is intentionally:
 - incremental
 - non-invasive
 - cache-only
+
+PECS-PRO intentionally avoids:
+- telemetry architectures
+- tracing infrastructures
+- vector databases
+- semantic indexing
+- orchestration layers
+- runtime analytics
+
+## Architecture Separation
+
+PECS keeps a strict separation between engine and workspace state:
+
+- PECS engine (this repository):
+	exporters, validators, normalization logic, topology tooling, runtime reinforcement, bridge installers/templates.
+- Workspace continuity state (inside target workspace):
+	`.pecs/` artifacts, continuity snapshots, runtime evidence, and bridge runtime/config.
+
+This separation keeps PECS small, deterministic, and maintainable.
+
+## Context Bridge
+
+The workspace-local context bridge exists only to:
+
+- normalize continuity inputs deterministically
+- compare-before-write
+- suppress no-op rewrites
+- persist stable continuity anchors
+
+The bridge does not:
+
+- act as conversational authority
+- perform semantic summarization
+- orchestrate AI decisions
+- replace LLM reasoning
+
+## Supported AI Tooling
+
+PECS is currently designed and tested primarily for:
+
+- GitHub Copilot Chat
+- Continue
+
+Compatibility note:
+- Other VS Code AI extensions may not preserve compatible continuity/workflow behavior.
+- PECS does not claim universal compatibility across all AI extensions.
+
+PECS continuity is built around deterministic workspace state,
+topology continuity, locality stabilization, and sparse runtime reinforcement.
+It is not a full conversational replay system.
 
 ## What changed in v2 vs v1
 
@@ -69,33 +153,270 @@ PECS-PRO v2 is intentionally:
 - low-token compact context export via `CompactContextBuilder`
 - no AST-heavy reconstruction or large continuity payloads
 
+## Minimal Continuity Algorithm
+
+PECS minimal continuity works as a small stabilization loop:
+
+1. Static topology extraction
+- collect structural topology anchors and compact locality artifacts
+
+2. Sparse runtime validation
+- use sparse runtime activation evidence only to reinforce active topology paths
+
+3. Locality heuristics
+- track edit clusters, repeated locality, runtime-touched files, and continuity hotspots
+
+4. Continuity snapshots
+- compress architectural state into compact JSON and Markdown exports
+
+5. LLM reconstruction
+- the LLM performs synthesis, reasoning, and reconstruction from these compact continuity anchors
+
+PECS does not perform the reasoning itself.
+
 ## Installation
 
-From the repository root:
+### One-Command Setup (Recommended)
+
+PECS-PRO is designed to be installed and configured with a single command per workspace.
+
+#### Step 1: Install PECS-PRO CLI (One Time)
+
+Clone or download PECS-PRO, then install it in editable mode:
 
 ```bash
-python3 -m pip install -e .
+# From PECS-PRO directory
+cd /path/to/PECS_PRO_V2_FINAL/pecs_pro
+source .venv/bin/activate
+pip install -e . --force-reinstall --no-deps
 ```
 
-Then install `watchdog`:
+Or set up a global alias (optional, for convenience):
 
 ```bash
-python3 -m pip install watchdog
+# Add to ~/.zshrc or ~/.bash_profile
+alias pecs='/path/to/PECS_PRO_V2_FINAL/pecs_pro/.venv/bin/pecs'
 ```
+
+Then reload:
+
+```bash
+source ~/.zshrc  # or ~/.bash_profile
+```
+
+#### Step 2: Deploy PECS to Your Workspace (One Command)
+
+Run this single command to set up any workspace:
+
+```bash
+pecs install-workspace-assets "/path/to/your/workspace"
+```
+
+That's it! This installs:
+
+- **Copilot Configuration** (`.github/copilot-instructions.md`)
+  - Enforces PECS-first routing for context retrieval
+  - Directs Copilot to check `.pecs/` artifacts before repository search
+
+- **Continue Configuration** (`.continue/config.yaml` and `.continue/rules/pecs-first-routing.yaml`)
+  - Registers PECS-first routing rule
+  - Narrows search scope to locality-aware context
+
+- **Workspace Documentation** (`.pecs/README.md`, `.pecs/README_WORKSPACE_PREPARATION.md`)
+  - Bootstrap checkpoint confirming successful installation
+  - Comprehensive setup and troubleshooting guide
+
+- **PECS Artifacts** (`.pecs/` directory structure)
+  - Continuity snapshots
+  - Active context tracking
+  - Topology artifacts
+
+#### Verify Installation
+
+```bash
+pecs verify-workspace "/path/to/your/workspace"
+```
+
+Expected output:
+
+```
+Verification: PASSED
+✓ .pecs/WORKSPACE_BOOTSTRAP.md
+✓ .pecs/README.md
+✓ .github/copilot-instructions.md
+✓ .continue/rules/pecs-first-routing.yaml
+... (and more)
+```
+
+### Upgrade an Existing Workspace
+
+To update PECS assets while preserving your configurations:
+
+```bash
+pecs install-workspace-assets "/path/to/your/workspace" --upgrade
+```
+
+### Repair a Broken Installation
+
+If assets are missing or configuration is broken:
+
+```bash
+pecs repair-workspace "/path/to/your/workspace"
+```
+
+### Troubleshooting
+
+#### Check Daemon Status
+
+```bash
+pecs status "/path/to/your/workspace"
+```
+
+#### Full Diagnostics
+
+```bash
+pecs doctor "/path/to/your/workspace" --verbose
+```
+
+#### Available Commands
+
+```bash
+pecs --help
+```
+
+Commands:
+
+- `install-workspace-assets` — Deploy PECS to a workspace
+- `verify-workspace` — Verify installation
+- `repair-workspace` — Repair broken installations
+- `status` — Check daemon status
+- `doctor` — Diagnose environment and installation
+- `PECS: Manual Update Chat History`
+
+The installed task commands automatically run the workspace environment setup when present:
+
+```bash
+cd "${workspaceFolder}"
+source .venv/bin/activate
+```
+
+Bridge/runtime artifacts are installed minimally under:
+
+```text
+.pecs/
+	continuity/
+	runtime/
+	config/
+	bridge/
+```
+
+## Minimal Invocation Flow
+
+You can run PECS as a minimal deterministic flow:
+
+```bash
+pecs-pro init /path/to/your/workspace
+pecs-pro refresh /path/to/your/workspace
+pecs-pro validate /path/to/your/workspace
+```
+
+Equivalent workspace-local bridge invocation:
+
+```bash
+python3 .pecs/bridge/run_bridge.py refresh --workspace /path/to/your/workspace
+python3 .pecs/bridge/run_bridge.py validate --workspace /path/to/your/workspace
+```
+
+PECS favors deterministic continuity stabilization over conversational memory systems.
+The bridge remains intentionally lightweight and non-semantic.
+
+## VS Code Task Workflow
+
+After initialization, PECS tasks become available in VS Code.
+
+Workflow:
+
+- VSCode
+- Terminal
+- Run Task
+- select a PECS task
+
+Expected PECS task names:
+
+- `PECS: Start Daemon`
+- `PECS: Stop Daemon`
+- `PECS: Refresh Continuity State`
+- `PECS: Validate Continuity State`
+- `PECS: Append Chat Event`
+- `PECS: Manual Update Chat History`
+- `PECS: Auto Start Daemon On Folder Open` (optional)
+
+## Daemon Lifecycle (Intentional Manual Control)
+
+The PECS daemon does NOT automatically start from package installation.
+The user manually starts the daemon during active AI-assisted development sessions.
+This is intentional to preserve deterministic and lightweight runtime behavior.
+
+## Bridge Lifecycle
+
+Normal users do NOT need to run the context bridge script directly.
+Use standard PECS refresh flow (`pecs-pro refresh` or `PECS: Refresh Continuity State`).
+Daemon/refresh operational flow is the supported path.
+Bridge execution is handled automatically by the daemon/refresh flow.
+
+The bridge remains:
+
+- lightweight
+- deterministic
+- non-semantic
+
+## No-Op Silence (Expected Behavior)
+
+After stabilization, PECS intentionally becomes mostly silent.
+
+No-op cycles are expected to produce:
+
+- no rewrites
+- no log spam
+- no continuity churn
+
+This is intentional and indicates deterministic steady-state behavior.
+
+## New AI Session Workflow
+
+For a new AI session, provide:
+
+- current task/problem
+- `.pecs` continuity state
+
+Prefer this over large historical chat dumps.
+
+PECS exists to reduce:
+
+- continuity collapse
+- search entropy
+- edit locality ambiguity
+
+Chat-history replay is optional and experimental.
+Deterministic `.pecs` continuity state should be the primary handoff.
+
+---
+
+For manual setup procedures, see `README_MANUAL_SETUP.md`.
+For optional chat-history workflows, see `README_AI_CHAT_HISTORY.md`.
 
 ## Running the daemon
 
-To start the live continuity daemon for a workspace:
+To start the live continuity daemon for a workspace (from anywhere):
 
 ```bash
-cd /path/to/your/workspace
-pecs-pro-daemon .
+pecs-pro-daemon /path/to/your/workspace
 ```
 
-Or directly:
+Or, if running directly from source (not recommended for production):
 
 ```bash
-python3 /path/to/PECS_PRO_V2_FINAL/pecs_pro/run_pecs_daemon.py .
+python3 /path/to/PECS_PRO_V2_FINAL/pecs_pro/run_pecs_daemon.py /path/to/your/workspace
 ```
 
 The daemon creates and updates a disposable `.pecs/` directory inside the monitored workspace.
@@ -112,7 +433,10 @@ The daemon creates and updates a disposable `.pecs/` directory inside the monito
 1. Install PECS-PRO in editable mode.
 2. Start the daemon before editing the target workspace.
 3. Make sure `.pecs/` is present and being updated.
-4. Consume `.pecs/` JSON exports from tooling or integrations.
+4. Periodically export continuity state from `.pecs/` into compact continuity snapshots.
+5. Consume `.pecs/` JSON exports from tooling or integrations.
+
+New projects benefit from early continuity initialization so topology anchors and continuity snapshots exist before sessions become fragmented.
 
 ## Disclaimer
 

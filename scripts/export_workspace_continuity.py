@@ -12,11 +12,18 @@ ACTIVE_TOPOLOGY_SCHEMA = "pecs.active_topology.v1"
 LOCALITY_STATE_SCHEMA = "pecs.locality_state.v1"
 PRESERVE_EMPTY_KEYS = {
     "schema",
+    "disclaimer",
     "active_topology_zone",
     "active_runtime_zones",
     "runtime_validation",
     "validation_metrics",
 }
+
+GENERATED_DISCLAIMER = (
+    "THIS FILE IS GENERATED CONTINUITY INFRASTRUCTURE. "
+    "DO NOT EDIT. DO NOT PATCH. "
+    "ENGINEERING TRUTH EXISTS ONLY IN WORKSPACE RUNTIME MODULES."
+)
 
 
 def _safe_ratio(numerator: int, denominator: int) -> float:
@@ -430,6 +437,7 @@ def export_workspace_continuity(workspace_root: Path) -> Dict[str, Any]:
     active_topology_payload = _drop_empty_sections(
         {
             "schema": ACTIVE_TOPOLOGY_SCHEMA,
+            "disclaimer": GENERATED_DISCLAIMER,
             "active_topology_zone": active_regions["active_topology_zone"],
             "active_runtime_zones": active_regions["active_runtime_zones"],
             "workspace_trajectory": workspace_trajectory,
@@ -442,6 +450,7 @@ def export_workspace_continuity(workspace_root: Path) -> Dict[str, Any]:
     locality_state_payload = _drop_empty_sections(
         {
             "schema": LOCALITY_STATE_SCHEMA,
+            "disclaimer": GENERATED_DISCLAIMER,
             "active_locality_clusters": recent_edit_clusters[:12],
             "repeated_edit_clusters": repeated_modifications[:8],
             "active_runtime_touched_files": runtime_touched_files[:12],

@@ -586,6 +586,14 @@ class WorkspaceContinuityDaemon:
 
     def _runtime_zone_for_path(self, path: Path) -> str:
         rel = str(path.relative_to(self.workspace_root)).lower()
+        if "dock" in rel:
+            return "dock_pipeline"
+        if "notes" in rel:
+            return "notes_pipeline"
+        if "search" in rel or "find" in rel:
+            return "search_pipeline"
+        if "monitor" in rel:
+            return "monitor_pipeline"
         if "overlay" in rel:
             return "overlay_pipeline"
         if "dialog" in rel:
@@ -609,6 +617,7 @@ class WorkspaceContinuityDaemon:
             "dissatisfaction_signals": [],
             "rejected_edits": [],
             "focus_terms": [],
+            "issue_terms": [],
         }
 
         if not self._chat_history_path.exists():
@@ -663,6 +672,10 @@ class WorkspaceContinuityDaemon:
                 rejected.append(token)
 
         zone_keywords = {
+            "dock_pipeline": ["dock", "pane", "sidebar", "geometry"],
+            "notes_pipeline": ["notes", "note", "sticky"],
+            "search_pipeline": ["search", "find", "lookup", "popup"],
+            "monitor_pipeline": ["monitor", "persist", "persistence", "watch"],
             "overlay_pipeline": ["overlay", "band", "wireframe"],
             "dialog_pipeline": ["dialog", "wizard", "popup"],
             "viewer_pipeline": ["viewer", "pdf", "canvas"],
@@ -671,20 +684,34 @@ class WorkspaceContinuityDaemon:
             "dispatch_pipeline": ["dispatch", "signal", "slot", "callback"],
         }
 
-        chosen_zone = "general_runtime"
+        zone_scores: Dict[str, int] = {}
         for zone, terms in zone_keywords.items():
-            if any(term in joined for term in terms):
-                chosen_zone = zone
-                break
+            zone_scores[zone] = sum(1 for term in terms if term in joined)
+
+        chosen_zone = "general_runtime"
+        ranked_zones = sorted(zone_scores.items(), key=lambda item: (-item[1], item[0]))
+        if ranked_zones and ranked_zones[0][1] > 0:
+            chosen_zone = ranked_zones[0][0]
 
         focus_terms = re.findall(
             r"[a-zA-Z_][a-zA-Z0-9_]{3,}", payload["current_issue"].lower()
         )
+        issue_terms = re.findall(
+            r"[a-zA-Z_][a-zA-Z0-9_]{2,}", payload["current_issue"].lower()
+        )
+
+        compact_issue_terms: List[str] = []
+        for term in issue_terms:
+            if len(compact_issue_terms) >= 10:
+                break
+            if term not in compact_issue_terms:
+                compact_issue_terms.append(term)
 
         payload["active_topology_zone"] = chosen_zone
         payload["dissatisfaction_signals"] = dissatisfaction
         payload["rejected_edits"] = rejected
         payload["focus_terms"] = sorted(set(focus_terms))[:16]
+        payload["issue_terms"] = compact_issue_terms
         return payload
 
     def _infer_locality_activation(
@@ -698,10 +725,18 @@ class WorkspaceContinuityDaemon:
             if path.suffix == ".py"
         ]
         dissatisfaction = focus.get("dissatisfaction_signals", [])
+        active_zone = str(focus.get("active_topology_zone", "general_runtime"))
+        historical_fix_locality = self.runtime_session.session_metadata.get(
+            "recent_fix_locality", []
+        )
+        current_session_objects = sorted(self.runtime_session.active_objects)
         activation = self.locality_activation_engine.infer_locality(
             current_issue=issue,
             edited_files=edited_files,
             dissatisfaction_signals=dissatisfaction,
+            active_topology_zone=active_zone,
+            historical_fix_locality=historical_fix_locality,
+            current_session_objects=current_session_objects,
         )
         self.edge_reinforcement.reset()
         self.edge_reinforcement.reinforce_edges(activation.get("observed_edges", []))
@@ -798,10 +833,14 @@ class WorkspaceContinuityDaemon:
             "bundle": bundle,
             "context_count": len(bundle),
             "active_topology_zone": active_zone,
+            "issue_terms": activation.get("issue_terms", focus.get("issue_terms", [])),
             "active_runtime_zones": activation.get("active_runtime_zones", []),
             "activated_objects": activation.get("activated_objects", []),
+            "activated_object_details": activation.get("activated_object_details", []),
+            "active_locality_clusters": activation.get("active_locality_clusters", []),
             "activation_confidence": activation.get("activation_confidence", {}),
             "activation_reasons": activation.get("activation_reasons", {}),
+            "activation_diagnostics": activation.get("activation_diagnostics", {}),
         }
 
     def _build_active_context_payload(
@@ -828,13 +867,17 @@ class WorkspaceContinuityDaemon:
 
         return {
             "current_issue": focus.get("current_issue", ""),
+            "issue_terms": activation.get("issue_terms", focus.get("issue_terms", [])),
             "active_topology_zone": focus.get(
                 "active_topology_zone", "general_runtime"
             ),
             "active_runtime_zones": activation.get("active_runtime_zones", []),
             "activated_objects": active_objects,
+            "activated_object_details": activation.get("activated_object_details", []),
+            "active_locality_clusters": activation.get("active_locality_clusters", []),
             "activation_confidence": activation.get("activation_confidence", {}),
             "activation_reasons": activation.get("activation_reasons", {}),
+            "activation_diagnostics": activation.get("activation_diagnostics", {}),
             "recent_locality": bundle_ids[:25],
             "runtime_neighborhood": neighborhood,
             "dissatisfaction_signals": focus.get("dissatisfaction_signals", []),

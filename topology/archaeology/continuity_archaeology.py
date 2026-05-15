@@ -20,17 +20,11 @@ class ContinuityArchaeology:
     PECS archaeology NEVER mutates runtime truth.
     """
 
-    duplicate_history: Dict[str, List[str]] = field(
-        default_factory=dict
-    )
+    duplicate_history: Dict[str, List[str]] = field(default_factory=dict)
 
-    canonical_drift_history: Dict[str, List[str]] = field(
-        default_factory=dict
-    )
+    canonical_drift_history: Dict[str, List[str]] = field(default_factory=dict)
 
-    regression_zones: Dict[str, List[str]] = field(
-        default_factory=dict
-    )
+    regression_zones: Dict[str, List[str]] = field(default_factory=dict)
 
     def register_duplicate_evolution(
         self,
@@ -48,11 +42,7 @@ class ContinuityArchaeology:
 
     def to_dict(self) -> Dict[str, object]:
         return {
-            "duplicate_history": (
-                self.duplicate_history
-            ),
-            "canonical_drift_history": (
-                self.canonical_drift_history
-            ),
+            "duplicate_history": (self.duplicate_history),
+            "canonical_drift_history": (self.canonical_drift_history),
             "regression_zones": self.regression_zones,
         }

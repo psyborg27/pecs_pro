@@ -1,0 +1,5 @@
+[console_scripts]
+pecs = workspace_bridge_cli:main
+pecs-pro = workspace_bridge_cli:main
+pecs-pro-daemon = run_pecs_daemon:main
+pecs-pro-install-workspace = install_workspace_integration:main

@@ -1,3 +1,6 @@
+install_workspace_integration
 pecs_pro
 run_pecs_daemon
 run_pecs_pro
+workspace_assets_manager
+workspace_bridge_cli

@@ -1,0 +1,190 @@
+{
+  "schema": "pecs.workspace_assets_manifest.v1",
+  "version": "1.0.0",
+  "description": "PECS workspace assets manifest. Describes all assets to install into target workspaces.",
+  "assets": [
+    {
+      "id": "workspace_bootstrap",
+      "source": "WORKSPACE_BOOTSTRAP.md",
+      "target": ".pecs/WORKSPACE_BOOTSTRAP.md",
+      "merge_strategy": "create_if_missing",
+      "required": true,
+      "create_dirs": true,
+      "description": "Workspace bootstrap checkpoint"
+    },
+    {
+      "id": "readme_workspace_preparation",
+      "source": "README_WORKSPACE_PREPARATION.md",
+      "target": ".pecs/README_WORKSPACE_PREPARATION.md",
+      "merge_strategy": "overwrite",
+      "required": false,
+      "create_dirs": true,
+      "description": "PECS workspace preparation guide"
+    },
+    {
+      "id": "copilot_instructions",
+      "source": ".github/copilot-instructions.md",
+      "target": ".github/copilot-instructions.md",
+      "merge_strategy": "append_or_merge",
+      "required": true,
+      "create_dirs": true,
+      "description": "GitHub Copilot instructions for PECS-first routing",
+      "merge_options": {
+        "preserve_existing_sections": true,
+        "append_section_marker": "<!-- PECS-PRO -->"
+      }
+    },
+    {
+      "id": "continue_config",
+      "source": ".continue/config.yaml",
+      "target": ".continue/config.yaml",
+      "merge_strategy": "merge_yaml",
+      "required": false,
+      "create_dirs": true,
+      "description": "Continue configuration with PECS rules",
+      "merge_options": {
+        "key_paths": ["rules"],
+        "merge_mode": "extend",
+        "create_if_missing_top_level": true
+      }
+    },
+    {
+      "id": "pecs_first_routing_rule",
+      "source": ".continue/rules/pecs-first-routing.yaml",
+      "target": ".continue/rules/pecs-first-routing.yaml",
+      "merge_strategy": "create_if_missing",
+      "required": true,
+      "create_dirs": true,
+      "description": "PECS-first routing rule for Continue"
+    },
+    {
+      "id": "pecs_context_rule",
+      "source": ".continue/rules/PECS_CONTEXT_RULE.md",
+      "target": ".continue/rules/PECS_CONTEXT_RULE.md",
+      "merge_strategy": "create_if_missing",
+      "required": true,
+      "create_dirs": true,
+      "description": "PECS context guidance for Continue"
+    },
+    {
+      "id": "pecs_append_rule",
+      "source": ".continue/rules/PECS_APPEND_RULE.md",
+      "target": ".continue/rules/PECS_APPEND_RULE.md",
+      "merge_strategy": "create_if_missing",
+      "required": true,
+      "create_dirs": true,
+      "description": "PECS chat append guidance for Continue"
+    },
+    {
+      "id": "pecs_readme",
+      "source": ".pecs/README.md",
+      "target": ".pecs/README.md",
+      "merge_strategy": "overwrite",
+      "required": true,
+      "create_dirs": true,
+      "description": "PECS workspace integration README"
+    },
+    {
+      "id": "readme_workspace_integration",
+      "source": "README_WORKSPACE_INTEGRATION.md",
+      "target": ".pecs/README_WORKSPACE_INTEGRATION.md",
+      "merge_strategy": "overwrite",
+      "required": true,
+      "create_dirs": true,
+      "description": "Workspace integration installation README"
+    }
+  ],
+  "merge_strategies": {
+    "overwrite": "Completely replace target file with source",
+    "create_if_missing": "Only create if target doesn't exist",
+    "append": "Append source content to target (text files)",
+    "append_or_merge": "Append for text, merge for structured files",
+    "merge_yaml": "Deep merge YAML structures",
+    "merge_markdown": "Safe merge markdown sections",
+    "preserve_existing": "Never modify target, always keep existing"
+  },
+  "installation_flow": {
+    "phase_1_validation": [
+      "Verify target workspace exists",
+      "Verify PECS repository root available",
+      "Verify workspace not PECS repository itself"
+    ],
+    "phase_2_backup": [
+      "Create backup of existing .github/copilot-instructions.md if present",
+      "Create backup of existing .continue/config.yaml if present"
+    ],
+    "phase_3_asset_deployment": [
+      "Deploy each asset according to merge strategy",
+      "Create required directories",
+      "Preserve existing user configuration"
+    ],
+    "phase_4_integration": [
+      "Install daemon infrastructure",
+      "Install chat tools",
+      "Install bridge runtime",
+      "Initialize continuity directories"
+    ],
+    "phase_5_verification": [
+      "Validate all required assets installed",
+      "Verify configuration syntax",
+      "Check daemon infrastructure ready"
+    ],
+    "phase_6_bootstrap": [
+      "Run initial continuity refresh",
+      "Generate bootstrap checkpoint",
+      "Document installation status"
+    ]
+  },
+  "verification": {
+    "required_assets": [
+      ".pecs/WORKSPACE_BOOTSTRAP.md",
+      ".pecs/README.md",
+      ".pecs/tools/append_ai_chat_history.py",
+      ".pecs/bridge/run_bridge.py",
+      ".github/copilot-instructions.md",
+      ".continue/rules/pecs-first-routing.yaml",
+      ".vscode/tasks.json"
+    ],
+    "required_daemon_files": [
+      ".pecs/bridge/run_bridge.py",
+      ".pecs/bridge/run_bridge.sh",
+      ".pecs/config/continuity_bridge.json"
+    ],
+    "required_daemon_directories": [
+      ".pecs/tools",
+      ".pecs/bridge",
+      ".pecs/config",
+      ".pecs/continuity",
+      ".pecs/runtime"
+    ]
+  },
+  "repair": {
+    "missing_asset_recovery": "Re-deploy missing required assets",
+    "invalid_config_recovery": "Regenerate configuration from templates",
+    "broken_daemon_recovery": "Reinstall bridge runtime and tools",
+    "continuity_reset": "Clear runtime state and refresh continuity"
+  },
+  "upgrade": {
+    "preserve_files": [
+      ".pecs/ai_chat_history.json",
+      ".pecs/continuity/architectural_decisions.md",
+      ".pecs/continuity/current_workspace_focus.md",
+      ".pecs/continuity/unresolved_tensions.md",
+      ".vscode/tasks.json",
+      ".vscode/settings.json"
+    ],
+    "safe_merge_files": [
+      ".github/copilot-instructions.md",
+      ".continue/config.yaml"
+    ],
+    "update_files": [
+      ".pecs/README.md",
+      ".pecs/README_WORKSPACE_PREPARATION.md",
+      ".pecs/tools/append_ai_chat_history.py",
+      ".pecs/bridge/run_bridge.py",
+      ".pecs/bridge/export_workspace_continuity.py",
+      ".pecs/bridge/validate_workspace_continuity.py",
+      ".continue/rules/pecs-first-routing.yaml"
+    ]
+  }
+}

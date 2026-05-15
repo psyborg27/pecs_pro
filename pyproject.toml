@@ -14,3 +14,18 @@ requires-python = ">=3.9"
 
 [project.urls]
 Home = "https://example.com/pecs_pro"
+
+[project.scripts]
+pecs = "workspace_bridge_cli:main"
+pecs-pro = "workspace_bridge_cli:main"
+pecs-pro-daemon = "run_pecs_daemon:main"
+pecs-pro-install-workspace = "install_workspace_integration:main"
+
+[tool.setuptools.package-data]
+pecs_pro = [
+  "workspace_assets/**/*",
+  "workspace_assets/**/.github/*",
+  "workspace_assets/**/.continue/*",
+  "workspace_assets/**/.pecs/*",
+  "workspace_assets/workspace_assets_manifest.json",
+]

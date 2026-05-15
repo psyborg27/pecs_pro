@@ -34,6 +34,8 @@ Copy these files from the PECS package folder into the target workspace:
 - `.pecs/tools/update_ai_chat_history.sh`
 - `.pecs/README_WORKSPACE_INTEGRATION.md`
 
+**Important:** `.pecs` artifacts are generated continuity infrastructure only. Do not edit `.pecs` files as if they were engineering sourcecode. Use them only to locate runtime workspace targets and verify locality.
+
 Create these files if they do not already exist:
 
 - `.pecs/ai_chat_history.json` with an initial value of `[]` (optional)

@@ -1,0 +1,28 @@
+include README.md
+include README_AI_CHAT_HISTORY.md
+include README_MANUAL_SETUP.md
+include pecs_pro_v_2_e_15_architecture_and_module_reference.md
+
+recursive-include workspace_assets *
+recursive-include workspace_assets .github*
+recursive-include workspace_assets .continue*
+recursive-include workspace_assets .pecs*
+
+recursive-include scripts *.py
+recursive-include continuity *.py
+recursive-include execution_graph *.py
+recursive-include exports *.py
+recursive-include integrations *.py
+recursive-include runtime *.py
+recursive-include topology *.py
+recursive-include validation *.py
+
+include *.py
+include *.sh
+include *.ps1
+include *.json
+
+global-exclude __pycache__
+global-exclude *.pyc
+global-exclude .DS_Store
+global-exclude .git*
