@@ -1,13 +1,183 @@
 from __future__ import annotations
 
 import argparse
+import importlib.metadata
 import json
 import logging
+import platform
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
+
+UNSTABLE_ROOT_PATTERNS = [
+    "Downloads",
+    "Desktop",
+    "/tmp/",
+    "/private/tmp/",
+    "/Volumes/",
+]
+
+RECOMMENDED_ROOTS = [
+    "~/Developer/PECS",
+    "~/Applications/PECS",
+]
+
+REQUIRED_DEPENDENCIES = ["watchdog"]
+WORKSPACE_INSTALL_ROOT_CONFIG = "install_root.json"
+
+
+def _get_central_python(repo_root: Path) -> str:
+    venv_python = repo_root / ".venv" / "bin" / "python"
+    if venv_python.exists() and venv_python.is_file():
+        return str(venv_python.resolve())
+    return sys.executable
+
+
+def is_unstable_root(path: Path) -> bool:
+    path_str = str(path)
+    for pattern in UNSTABLE_ROOT_PATTERNS:
+        if pattern in path_str:
+            return True
+    return False
+
+
+def validate_dependencies(verbose: bool = False) -> dict:
+    results = {}
+    for dep in REQUIRED_DEPENDENCIES:
+        try:
+            __import__(dep)
+            results[dep] = "ok"
+        except ImportError:
+            results[dep] = "missing"
+    if verbose:
+        print("Dependency validation results:", results)
+    return results
+
+
+def install_missing_dependencies():
+    missing = [dep for dep, status in validate_dependencies().items() if status != "ok"]
+    if missing:
+        print(f"Attempting to install missing dependencies: {missing}")
+        try:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", *missing])
+        except Exception as e:
+            print(f"ERROR: Failed to install dependencies: {missing}")
+            sys.exit(2)
+        print(f"Dependencies installed: {missing}")
+    else:
+        print("All required dependencies are present.")
+
+
+def print_install_root_guidance(repo_root: Path):
+    if is_unstable_root(repo_root):
+        print(
+            f"WARNING: PECS is being installed from an unstable or transient location: {repo_root}",
+            file=sys.stderr,
+        )
+        print(
+            "It is strongly recommended to install PECS in a stable, user-owned directory such as:",
+            file=sys.stderr,
+        )
+        for rec in RECOMMENDED_ROOTS:
+            print(f"  {rec}", file=sys.stderr)
+        print(
+            "PECS acts as persistent continuity infrastructure and should not reside in transient directories.",
+            file=sys.stderr,
+        )
+
+
+def health_check(workspace_root: Path, repo_root: Path, verbose: bool = False) -> dict:
+    results = {
+        "install_root": str(repo_root),
+        "install_root_stable": not is_unstable_root(repo_root),
+        "dependencies": validate_dependencies(verbose=verbose),
+        "python_executable": sys.executable,
+        "python_executable_is_repo_venv": str(repo_root / ".venv" / "bin" / "python")
+        == str(Path(sys.executable).resolve()),
+        "daemon_script": str(repo_root / "launch_pecs_daemon.sh"),
+        "daemon_script_exists": (repo_root / "launch_pecs_daemon.sh").exists(),
+        "workspace_root": str(workspace_root),
+        "workspace_exists": workspace_root.exists(),
+        "workspace_install_root": None,
+        "workspace_install_root_matches_repo_root": False,
+        "package_installed": False,
+        "console_scripts": {},
+    }
+
+    try:
+        dist = importlib.metadata.distribution("pecs_pro")
+        results["package_installed"] = True
+        results["console_scripts"] = {
+            ep.name: ep.value
+            for ep in dist.entry_points
+            if ep.group == "console_scripts"
+        }
+    except importlib.metadata.PackageNotFoundError:
+        results["package_installed"] = False
+
+    pecs_path = shutil.which("pecs")
+    results["pecs_entrypoint_path"] = pecs_path if pecs_path else None
+
+    workspace_install_root = _read_workspace_install_root(workspace_root)
+    if workspace_install_root is not None:
+        results["workspace_install_root"] = str(workspace_install_root)
+        results["workspace_install_root_matches_repo_root"] = (
+            workspace_install_root == repo_root
+        )
+
+    return results
+
+
+def _workspace_install_root_config_path(workspace_root: Path) -> Path:
+    return workspace_root / ".pecs" / "config" / WORKSPACE_INSTALL_ROOT_CONFIG
+
+
+def _workspace_registry_path(repo_root: Path) -> Path:
+    return repo_root / ".pecs_workspaces.json"
+
+
+def _write_workspace_install_root(workspace_root: Path, repo_root: Path) -> None:
+    config_path = _workspace_install_root_config_path(workspace_root)
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(
+        json.dumps({"install_root": str(repo_root.resolve())}, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+
+
+def register_workspace(repo_root: Path, workspace_root: Path) -> None:
+    registry_path = _workspace_registry_path(repo_root)
+    workspace_list: List[str] = []
+    if registry_path.exists():
+        try:
+            workspace_list = json.loads(registry_path.read_text(encoding="utf-8"))
+        except Exception:
+            workspace_list = []
+
+    workspace_root_str = str(workspace_root.resolve())
+    if workspace_root_str not in workspace_list:
+        workspace_list.append(workspace_root_str)
+        registry_path.write_text(
+            json.dumps(workspace_list, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
+
+
+def read_registered_workspaces(repo_root: Path) -> List[Path]:
+    registry_path = _workspace_registry_path(repo_root)
+    if not registry_path.exists():
+        return []
+
+    try:
+        workspace_list = json.loads(registry_path.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+
+    return [Path(path).resolve() for path in workspace_list if isinstance(path, str)]
 
 
 def _read_json(path: Path, default: Dict[str, Any]) -> Dict[str, Any]:
@@ -34,15 +204,14 @@ def _merge_tasks(tasks_path: Path, repo_root: Path) -> None:
         base.get("inputs", []) if isinstance(base.get("inputs"), list) else []
     )
 
-    launcher = str((repo_root / "launch_pecs_daemon.sh").resolve())
+    python_bin = _get_central_python(repo_root)
 
     start_task = {
         "label": "PECS: Start Daemon",
         "type": "shell",
         "command": (
             'bash -lc \'cd "${workspaceFolder}" '
-            "&& if [[ -f .venv/bin/activate ]]; then source .venv/bin/activate; fi "
-            f'&& PECS_PRO_REPO="{repo_root}" "{launcher}" "${{workspaceFolder}}"\''
+            '&& bash .pecs/run_pecs_daemon.sh "${workspaceFolder}"\''
         ),
         "isBackground": True,
         "problemMatcher": [],
@@ -74,9 +243,8 @@ def _merge_tasks(tasks_path: Path, repo_root: Path) -> None:
         "type": "shell",
         "command": (
             'bash -lc \'cd "${workspaceFolder}" '
-            "&& if [[ -f .venv/bin/activate ]]; then source .venv/bin/activate; fi "
-            '&& python3 .pecs/tools/append_ai_chat_history.py "${workspaceFolder}" '
-            '--source "${input:pecsChatSource}" --message "${input:pecsChatMessage}"\''
+            '&& python3 .pecs/tools/append_ai_chat_history.py "${{workspaceFolder}}" '
+            '--source "${{input:pecsChatSource}}" --message "${{input:pecsChatMessage}}"\''
         ),
     }
 
@@ -85,8 +253,7 @@ def _merge_tasks(tasks_path: Path, repo_root: Path) -> None:
         "type": "shell",
         "command": (
             'bash -lc \'cd "${workspaceFolder}" '
-            "&& if [[ -f .venv/bin/activate ]]; then source .venv/bin/activate; fi "
-            '&& bash .pecs/tools/update_ai_chat_history.sh "${workspaceFolder}" "${input:pecsChatSource}" "${input:pecsChatMessage}"\''
+            '&& bash .pecs/tools/update_ai_chat_history.sh "${{workspaceFolder}}" "${{input:pecsChatSource}}" "${{input:pecsChatMessage}}"\''
         ),
     }
 
@@ -95,8 +262,7 @@ def _merge_tasks(tasks_path: Path, repo_root: Path) -> None:
         "type": "shell",
         "command": (
             'bash -lc \'cd "${workspaceFolder}" '
-            "&& if [[ -f .venv/bin/activate ]]; then source .venv/bin/activate; fi "
-            '&& python3 .pecs/bridge/run_bridge.py refresh --workspace "${workspaceFolder}"\''
+            '&& bash .pecs/bridge/run_bridge.sh refresh\''
         ),
     }
 
@@ -105,8 +271,7 @@ def _merge_tasks(tasks_path: Path, repo_root: Path) -> None:
         "type": "shell",
         "command": (
             'bash -lc \'cd "${workspaceFolder}" '
-            "&& if [[ -f .venv/bin/activate ]]; then source .venv/bin/activate; fi "
-            '&& python3 .pecs/bridge/run_bridge.py validate --workspace "${workspaceFolder}"\''
+            '&& bash .pecs/bridge/run_bridge.sh validate\''
         ),
     }
 
@@ -486,6 +651,17 @@ def main() -> None:
         default=None,
         help=\"Workspace root path.\",
     )
+
+    parser.add_argument(
+        "--validate-deps",
+        action="store_true",
+        help="Validate required Python dependencies and exit",
+    )
+    parser.add_argument(
+        "--health-check",
+        action="store_true",
+        help="Run installation health check and exit",
+    )
     args = parser.parse_args()
 
     workspace_value = args.workspace_flag or args.workspace_root or \".\"
@@ -509,12 +685,28 @@ set -euo pipefail
 
 WORKSPACE_ROOT="${1:-.}"
 COMMAND="${2:-refresh}"
+BRIDGE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONFIG_FILE="$BRIDGE_DIR/../config/install_root.json"
+INSTALL_ROOT=""
 
-cd "$WORKSPACE_ROOT"
-if [[ -f .venv/bin/activate ]]; then
-  source .venv/bin/activate
+if [[ -f "$CONFIG_FILE" ]]; then
+  INSTALL_ROOT="$(python3 - "$CONFIG_FILE" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+try:
+    data = json.loads(path.read_text(encoding='utf-8'))
+    print(data.get('install_root', ''))
+except Exception:
+    pass
+PY
+)"
 fi
 
+if [[ -n "$INSTALL_ROOT" && -f "$INSTALL_ROOT/.venv/bin/activate" ]]; then
+  source "$INSTALL_ROOT/.venv/bin/activate"
+fi
+
+cd "$WORKSPACE_ROOT"
 python3 .pecs/bridge/run_bridge.py "$COMMAND" --workspace "$WORKSPACE_ROOT"
 """
     (bridge_dir / "run_bridge.sh").write_text(bridge_sh, encoding="utf-8")
@@ -584,6 +776,44 @@ python3 .pecs/bridge/run_bridge.py "$COMMAND" --workspace "$WORKSPACE_ROOT"
         path = continuity_dir / file_name
         if not path.exists():
             path.write_text(content, encoding="utf-8")
+
+
+def _install_workspace_local_launchers(workspace_root: Path, repo_root: Path) -> None:
+    launcher = workspace_root / ".pecs" / "run_pecs_daemon.sh"
+    launcher.parent.mkdir(parents=True, exist_ok=True)
+    launcher_content = """#!/usr/bin/env bash
+set -euo pipefail
+
+WORKSPACE_ROOT="${1:-.}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONFIG_FILE="$SCRIPT_DIR/config/install_root.json"
+INSTALL_ROOT=""
+
+if [[ -f "$CONFIG_FILE" ]]; then
+  INSTALL_ROOT="$(python3 - "$CONFIG_FILE" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+try:
+    data = json.loads(path.read_text(encoding='utf-8'))
+    print(data.get('install_root', ''))
+except Exception:
+    pass
+PY
+)"
+fi
+
+if [[ -n "$INSTALL_ROOT" && -f "$INSTALL_ROOT/.venv/bin/activate" ]]; then
+  source "$INSTALL_ROOT/.venv/bin/activate"
+fi
+
+if command -v pecs-pro-daemon >/dev/null 2>&1; then
+  pecs-pro-daemon "$WORKSPACE_ROOT"
+else
+  python3 -m pecs_pro.run_pecs_daemon "$WORKSPACE_ROOT"
+fi
+"""
+    launcher.write_text(launcher_content, encoding="utf-8")
+    launcher.chmod(0o755)
 
 
 def _write_readme(workspace_root: Path) -> None:
@@ -668,6 +898,9 @@ def install_workspace(workspace_root: Path, repo_root: Path) -> None:
     _write_copilot_instructions(workspace_root)
     _copy_manual_setup_guide(workspace_root, repo_root)
     _write_readme(workspace_root)
+    _write_workspace_install_root(workspace_root, repo_root)
+    _install_workspace_local_launchers(workspace_root, repo_root)
+    register_workspace(repo_root, workspace_root)
 
 
 def main() -> None:
@@ -691,6 +924,16 @@ def main() -> None:
         help="Verify installation without installing",
     )
     parser.add_argument(
+        "--validate-deps",
+        action="store_true",
+        help="Validate required Python dependencies and exit",
+    )
+    parser.add_argument(
+        "--health-check",
+        action="store_true",
+        help="Run installation health check and exit",
+    )
+    parser.add_argument(
         "--verbose",
         action="store_true",
         help="Enable verbose logging",
@@ -710,6 +953,33 @@ def main() -> None:
         else Path(__file__).resolve().parent
     )
 
+    # Install-root safety guidance
+    print_install_root_guidance(repo_root)
+
+    # Dependency validation/health check CLI
+    if args.validate_deps:
+        results = validate_dependencies(verbose=True)
+        missing = [dep for dep, status in results.items() if status != "ok"]
+        if missing:
+            print(f"Missing dependencies: {missing}")
+            sys.exit(2)
+        print("All required dependencies are present.")
+        sys.exit(0)
+
+    if args.health_check:
+        results = health_check(workspace_root, repo_root, verbose=True)
+        print(json.dumps(results, indent=2))
+        if not results["install_root_stable"]:
+            print("WARNING: Unstable install root detected.", file=sys.stderr)
+        if any(v != "ok" for v in results["dependencies"].values()):
+            print("ERROR: Missing dependencies.", file=sys.stderr)
+            sys.exit(2)
+        if not results["daemon_script_exists"]:
+            print("ERROR: Daemon launch script missing.", file=sys.stderr)
+            sys.exit(3)
+        print("PECS installation health check passed.")
+        sys.exit(0)
+
     if not workspace_root.exists():
         logger.error(f"Workspace does not exist: {workspace_root}")
         sys.exit(1)
@@ -719,9 +989,15 @@ def main() -> None:
         logger.info(f"Workspace: {workspace_root}")
         logger.info(f"PECS repository: {repo_root}")
 
+        # Dependency guarantee before install
+        install_missing_dependencies()
+
         # Try to use manifest-based manager if available
         try:
-            from .workspace_assets_manager import WorkspaceAssetsManager
+            try:
+                from pecs_pro.workspace_assets_manager import WorkspaceAssetsManager
+            except ImportError:
+                from .workspace_assets_manager import WorkspaceAssetsManager
 
             logger.info("Using manifest-based workspace assets manager")
             manager = WorkspaceAssetsManager(repo_root, workspace_root)

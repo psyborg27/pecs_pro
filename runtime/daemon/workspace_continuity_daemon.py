@@ -13,10 +13,10 @@ from typing import Deque, Dict, Iterable, List, Optional, Set, Tuple
 
 from ..locality_activation_engine import LocalityActivationEngine
 from ..runtime_activation_logger import RuntimeActivationLogger
-from ...topology.compaction.compact_context_builder import CompactContextBuilder
-from ...topology.locality_traversal import LocalityTraversal
-from ...topology.runtime_edge_reinforcement import RuntimeEdgeReinforcement
-from ...topology.topology_edge_weights import edge_weight
+from topology.compaction.compact_context_builder import CompactContextBuilder
+from topology.locality_traversal import LocalityTraversal
+from topology.runtime_edge_reinforcement import RuntimeEdgeReinforcement
+from topology.topology_edge_weights import edge_weight
 from ..session.workspace_runtime_session import WorkspaceRuntimeSession
 
 # Keep watchdog imports at module scope so nested handlers can always resolve.

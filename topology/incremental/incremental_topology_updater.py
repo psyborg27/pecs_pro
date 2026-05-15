@@ -4,13 +4,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Set
 
-from ...execution_graph.indexes.graph_index import (
+from execution_graph.indexes.graph_index import (
     GraphIndex,
 )
-from ...topology.indexing.locality_index import (
+from topology.indexing.locality_index import (
     LocalityIndex,
 )
-from ...topology.retrieval.topology_retriever import (
+from topology.retrieval.topology_retriever import (
     TopologyRetriever,
 )
 

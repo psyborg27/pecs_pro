@@ -3,10 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, List
 
-from ...execution_graph.indexes.execution_index import (
+from execution_graph.indexes.execution_index import (
     ExecutionIndex,
 )
-from ...execution_graph.indexes.ownership_index import (
+from execution_graph.indexes.ownership_index import (
     OwnershipIndex,
 )
 from ..indexing.locality_index import LocalityIndex

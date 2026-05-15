@@ -4,19 +4,19 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Set
 
-from ...execution_graph.indexes.execution_index import (
+from execution_graph.indexes.execution_index import (
     ExecutionIndex,
 )
-from ...execution_graph.indexes.graph_index import (
+from execution_graph.indexes.graph_index import (
     GraphIndex,
 )
-from ...topology.indexing.locality_index import (
+from topology.indexing.locality_index import (
     LocalityIndex,
 )
-from ...topology.retrieval.topology_retriever import (
+from topology.retrieval.topology_retriever import (
     TopologyRetriever,
 )
-from ...topology.incremental.incremental_topology_updater import (
+from topology.incremental.incremental_topology_updater import (
     IncrementalTopologyUpdater,
 )
 
