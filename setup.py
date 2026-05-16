@@ -14,22 +14,6 @@ setup(
         "workspace_assets_manager",
         "workspace_bridge_cli",
     ],
-    package_data={
-        "": [
-            "workspace_assets/**/*",
-            "workspace_assets/**/.github/*",
-            "workspace_assets/**/.continue/*",
-            "workspace_assets/**/.pecs/*",
-            "workspace_assets/workspace_assets_manifest.json",
-        ],
-        "pecs_pro": [
-            "workspace_assets/**/*",
-            "workspace_assets/**/.github/*",
-            "workspace_assets/**/.continue/*",
-            "workspace_assets/**/.pecs/*",
-            "workspace_assets/workspace_assets_manifest.json",
-        ],
-    },
     install_requires=["watchdog>=3.0.0,<4.0.0"],
     python_requires=">=3.9",
     entry_points={

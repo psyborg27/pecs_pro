@@ -36,19 +36,3 @@ py-modules = [
   "workspace_bridge_cli",
 ]
 include-package-data = true
-
-[tool.setuptools.package-data]
-"" = [
-  "workspace_assets/**/*",
-  "workspace_assets/**/.github/*",
-  "workspace_assets/**/.continue/*",
-  "workspace_assets/**/.pecs/*",
-  "workspace_assets/workspace_assets_manifest.json",
-]
-pecs_pro = [
-  "workspace_assets/**/*",
-  "workspace_assets/**/.github/*",
-  "workspace_assets/**/.continue/*",
-  "workspace_assets/**/.pecs/*",
-  "workspace_assets/workspace_assets_manifest.json",
-]

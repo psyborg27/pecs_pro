@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import hashlib
 import json
 import logging
 import os
@@ -77,6 +78,7 @@ class WorkspaceContinuityDaemon:
     current_changes: Set[Path] = field(default_factory=set, init=False)
     pid_file_name: str = "daemon.pid"
 
+    workspace_id: str = field(init=False)
     runtime_reachable_files: Set[Path] = field(default_factory=set, init=False)
     runtime_locality_payload: Dict[str, Dict[str, object]] = field(
         default_factory=dict, init=False
@@ -102,6 +104,17 @@ class WorkspaceContinuityDaemon:
             raise FileNotFoundError(
                 f"Workspace root does not exist: {self.workspace_root}"
             )
+
+        self.workspace_id = hashlib.sha256(
+            str(self.workspace_root).encode("utf-8")
+        ).hexdigest()
+
+    def _workspace_metadata(self) -> Dict[str, str]:
+        return {
+            "workspace_root": str(self.workspace_root),
+            "workspace_id": self.workspace_id,
+            "continuity_namespace": self.workspace_id,
+        }
 
     def start(self) -> None:
         """Start live filesystem monitoring and artifact regeneration."""
@@ -931,6 +944,10 @@ class WorkspaceContinuityDaemon:
         )
 
     def _write_json_path(self, path: Path, data: object) -> None:
+        if isinstance(data, dict) and "workspace_metadata" not in data:
+            data = dict(data)
+            data["workspace_metadata"] = self._workspace_metadata()
+
         try:
             canonical_new = self._canonical_json(data)
             if path.exists():

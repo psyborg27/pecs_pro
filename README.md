@@ -46,6 +46,9 @@ python -m pip install -e .
 # Bootstrap a workspace end-to-end
 pecs bootstrap-workspace "/Users/raj/Downloads/auto OCR app"
 
+# Or use the automated onboarding script
+./setup.sh "/Users/raj/Downloads/auto OCR app"
+
 # Verify runtime and continuity state
 pecs verify-workspace "/Users/raj/Downloads/auto OCR app"
 pecs status "/Users/raj/Downloads/auto OCR app"
@@ -66,6 +69,10 @@ python -m pip install -e .
 
 # Bootstrap a workspace end-to-end
 pecs bootstrap-workspace "C:\Users\<USER>\Downloads\auto OCR app"
+
+# Or use the automated onboarding scripts
+.\setup.ps1 "C:\Users\<USER>\Downloads\auto OCR app"
+setup.bat "C:\Users\<USER>\Downloads\auto OCR app"
 
 # Verify runtime and continuity state
 pecs verify-workspace "C:\Users\<USER>\Downloads\auto OCR app"

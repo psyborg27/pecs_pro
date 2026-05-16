@@ -21,6 +21,7 @@ recursive-include validation *.py
 include *.py
 include *.sh
 include *.ps1
+include *.bat
 include *.json
 
 global-exclude __pycache__

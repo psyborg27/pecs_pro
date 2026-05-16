@@ -24,6 +24,16 @@ PECS must reside in a stable, user-owned directory to ensure reliable operation 
 - `watchdog` Python package (required for daemon monitoring)
 - `pip`, `setuptools`, and `wheel` for install bootstrap
 
+## Automated Onboarding Scripts
+
+If you prefer a single onboarding entrypoint, use the provided scripts from the PECS repository root:
+
+- `./setup.sh <workspace-root>` on macOS/Linux
+- `.\setup.ps1 <workspace-root>` on Windows PowerShell
+- `setup.bat <workspace-root>` on Windows CMD
+
+These scripts create the repository virtual environment, install PECS in editable mode, install workspace assets, start the daemon, refresh continuity state, and validate the workspace.
+
 ## Installation Health Check
 
 After manual setup, verify PECS installation and entrypoints:

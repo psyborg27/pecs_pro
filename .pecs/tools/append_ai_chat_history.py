@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import time
 from pathlib import Path
@@ -22,15 +23,29 @@ def _load_history(path: Path) -> List[Dict[str, Any]]:
     return [item for item in data if isinstance(item, dict)]
 
 
-def _build_payload(args: argparse.Namespace) -> Dict[str, Any]:
+def _workspace_id(workspace_root: Path) -> str:
+    return hashlib.sha256(str(workspace_root.resolve()).encode("utf-8")).hexdigest()
+
+
+def _build_payload(args: argparse.Namespace, workspace_root: Path) -> Dict[str, Any]:
+    workspace_metadata = {
+        "workspace_root": str(workspace_root),
+        "workspace_id": _workspace_id(workspace_root),
+        "continuity_namespace": _workspace_id(workspace_root),
+    }
+
     if args.payload_json:
         payload = json.loads(args.payload_json)
         if not isinstance(payload, dict):
             raise ValueError("--payload-json must decode to a JSON object")
         payload.setdefault("ts", time.time())
+        payload.update(workspace_metadata)
         return payload
 
     return {
+        "workspace_root": workspace_metadata["workspace_root"],
+        "workspace_id": workspace_metadata["workspace_id"],
+        "continuity_namespace": workspace_metadata["continuity_namespace"],
         "source": args.source,
         "message": args.message,
         "ts": time.time(),
@@ -65,7 +80,7 @@ def main() -> None:
 
     chat_file = pecs_dir / "ai_chat_history.json"
     history = _load_history(chat_file)
-    payload = _build_payload(args)
+    payload = _build_payload(args, workspace_root)
     history.append(payload)
 
     chat_file.write_text(
