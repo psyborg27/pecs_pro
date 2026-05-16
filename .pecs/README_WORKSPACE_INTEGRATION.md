@@ -18,8 +18,14 @@ Installed items:
 - .pecs/bridge/run_bridge.py
 - .pecs/bridge/export_workspace_continuity.py
 - .pecs/bridge/validate_workspace_continuity.py
+- .pecs/config/install_root.json
 - .pecs/config/continuity_bridge.json
+- .pecs/run_pecs.sh
+- .pecs/run_pecs.cmd
+- .pecs/run_pecs_daemon.sh
+- .pecs/run_pecs_daemon.cmd
 - .pecs/continuity/engineering_continuity_state.json
+- .pecs/continuity/continuity_hydration_report.json
 - .pecs/README_MANUAL_SETUP.md
 
 PECS v2 Process Flow:

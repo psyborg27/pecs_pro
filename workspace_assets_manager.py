@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import shutil
 from datetime import datetime
@@ -327,6 +328,9 @@ class WorkspaceAssetsManager:
         if install_root_config.exists():
             try:
                 config = json.loads(install_root_config.read_text(encoding="utf-8"))
+                if not isinstance(config, dict):
+                    raise ValueError("install_root.json root element is not an object")
+
                 install_root = Path(config.get("install_root", ""))
                 if install_root.exists():
                     install_root = install_root.resolve()
@@ -340,6 +344,23 @@ class WorkspaceAssetsManager:
                         "Workspace install root config references a missing PECS install root"
                     )
                     result["valid"] = False
+
+                python_path = config.get("python_path", "")
+                if not python_path or not Path(python_path).exists():
+                    result["errors"].append(
+                        "Workspace install root runtime is incomplete: python_path is missing or invalid"
+                    )
+                    result["valid"] = False
+
+                console_scripts = config.get("console_scripts", {})
+                if not isinstance(console_scripts, dict):
+                    console_scripts = {}
+                for name in ["pecs", "pecs-pro-daemon"]:
+                    script_path = console_scripts.get(name, "")
+                    if not script_path or not Path(script_path).exists():
+                        result["warnings"].append(
+                            f"Workspace install root is missing expected console script: {name}"
+                        )
             except Exception:
                 result["errors"].append(
                     "Workspace install root config is invalid or unreadable"
@@ -350,6 +371,23 @@ class WorkspaceAssetsManager:
                 "Workspace install root config missing: .pecs/config/install_root.json"
             )
             result["valid"] = False
+
+        for launcher_path in [
+            ".pecs/run_pecs.sh",
+            ".pecs/run_pecs.cmd",
+            ".pecs/run_pecs.ps1",
+            ".pecs/run_pecs_daemon.sh",
+            ".pecs/run_pecs_daemon.cmd",
+            ".pecs/run_pecs_daemon.ps1",
+        ]:
+            full_path = self.workspace_root / launcher_path
+            if not full_path.exists():
+                result["errors"].append(f"Workspace launcher missing: {launcher_path}")
+                result["valid"] = False
+            elif full_path.suffix == ".sh" and not os.access(full_path, os.X_OK):
+                result["warnings"].append(
+                    f"Workspace launcher exists but is not executable: {launcher_path}"
+                )
 
         tasks_path = self.workspace_root / ".vscode" / "tasks.json"
         if tasks_path.exists():

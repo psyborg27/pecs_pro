@@ -50,10 +50,13 @@ def _is_process_running(pid: int) -> bool:
 
 
 def _start_workspace_daemon(workspace_root: Path) -> None:
-    daemon_script = workspace_root / ".pecs" / "run_pecs_daemon.sh"
-    if not daemon_script.exists():
+    shell_daemon = workspace_root / ".pecs" / "run_pecs_daemon.sh"
+    cmd_daemon = workspace_root / ".pecs" / "run_pecs_daemon.cmd"
+    ps1_daemon = workspace_root / ".pecs" / "run_pecs_daemon.ps1"
+
+    if not shell_daemon.exists() and not cmd_daemon.exists() and not ps1_daemon.exists():
         raise FileNotFoundError(
-            f"Workspace daemon launcher missing: {daemon_script}. Run install-workspace-assets or bootstrap-workspace first."
+            "Workspace daemon launcher missing: .pecs/run_pecs_daemon.(sh|cmd|ps1). Run install-workspace-assets or bootstrap-workspace first."
         )
 
     pid_file = workspace_root / ".pecs" / "daemon.pid"
@@ -68,13 +71,35 @@ def _start_workspace_daemon(workspace_root: Path) -> None:
         except Exception:
             pid_file.unlink(missing_ok=True)
 
-    bash_path = shutil.which("bash")
-    if not bash_path:
-        raise RuntimeError("Cannot start daemon: bash is not available on PATH.")
+    launch_cmd = None
+    if os.name == "nt":
+        if cmd_daemon.exists():
+            launch_cmd = [str(cmd_daemon), str(workspace_root)]
+        elif ps1_daemon.exists():
+            powershell_exe = shutil.which("powershell") or shutil.which("pwsh")
+            if not powershell_exe:
+                raise RuntimeError("Cannot start daemon: PowerShell is not available on PATH.")
+            launch_cmd = [
+                powershell_exe,
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                str(ps1_daemon),
+                str(workspace_root),
+            ]
+    else:
+        bash_path = shutil.which("bash")
+        if not bash_path:
+            raise RuntimeError("Cannot start daemon: bash is not available on PATH.")
+        launch_cmd = [bash_path, str(shell_daemon), str(workspace_root)]
+
+    if launch_cmd is None:
+        raise RuntimeError("No supported daemon launcher found for this platform.")
 
     logger.info(f"Starting workspace daemon for {workspace_root}")
     subprocess.Popen(
-        [bash_path, str(daemon_script), str(workspace_root)],
+        launch_cmd,
         cwd=str(workspace_root),
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -515,7 +540,10 @@ def _cmd_doctor(args: argparse.Namespace) -> None:
             ".pecs/tools/append_ai_chat_history.py",
             ".pecs/bridge/run_bridge.py",
             ".pecs/bridge/run_bridge.sh",
+            ".pecs/run_pecs.sh",
+            ".pecs/run_pecs.cmd",
             ".pecs/run_pecs_daemon.sh",
+            ".pecs/run_pecs_daemon.cmd",
             ".github/copilot-instructions.md",
             ".continue/rules/pecs-first-routing.yaml",
             ".vscode/tasks.json",

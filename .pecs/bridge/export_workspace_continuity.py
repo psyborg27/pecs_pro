@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 from collections import Counter, defaultdict
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
@@ -10,6 +11,8 @@ ARTIFACT_DIR = ".pecs"
 CONTINUITY_DIR = ".pecs/continuity"
 ACTIVE_TOPOLOGY_SCHEMA = "pecs.active_topology.v1"
 LOCALITY_STATE_SCHEMA = "pecs.locality_state.v1"
+ENGINEERING_CONTINUITY_SCHEMA = "pecs.engineering_continuity.v1"
+CONTINUITY_HYDRATION_REPORT_SCHEMA = "pecs.continuity_hydration_report.v1"
 PRESERVE_EMPTY_KEYS = {
     "schema",
     "disclaimer",
@@ -150,6 +153,155 @@ def _resolve_runtime_touched_files(
         {"file": file_path, "touch_count": touched[file_path]}
         for file_path in sorted(touched, key=lambda p: (-touched[p], p))
     ]
+
+
+def _normalize_chat_history_entries(entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    normalized: List[Dict[str, Any]] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        message = str(entry.get("message", "") or "").strip()
+        if not message:
+            continue
+        source = str(entry.get("source", "") or "").strip().lower()
+        ts = entry.get("ts", 0)
+        try:
+            ts = float(ts)
+        except Exception:
+            ts = 0.0
+        normalized.append({"source": source, "message": message, "ts": ts})
+    normalized.sort(key=lambda item: (item["ts"], item["source"], item["message"]))
+    return normalized
+
+
+def _infer_engineering_continuity_topic(message: str) -> str:
+    text = message.lower()
+    if any(keyword in text for keyword in ["continuity", "hydrate", "hydration"]):
+        return "continuity_hydration"
+    if any(keyword in text for keyword in ["install", "bootstrap", "rebind", "bind", "asset"]):
+        return "workspace_installation"
+    if any(keyword in text for keyword in ["daemon", "bridge", "task", "launch"]):
+        return "workspace_daemon_bridge"
+    if any(keyword in text for keyword in ["copilot", "continue", "chat"]):
+        return "ai_interaction_ingestion"
+    return "workspace_onboarding"
+
+
+def _infer_engineering_continuity_locality(message: str) -> str:
+    text = message.lower()
+    if any(keyword in text for keyword in ["daemon", "bridge", "launch", "startup"]):
+        return "workspace_bridge_cli.py"
+    if any(keyword in text for keyword in ["install", "bootstrap", "register", "bind", "rebind", "assets"]):
+        return "install_workspace_integration.py"
+    if any(keyword in text for keyword in ["continuity", "hydrate", "hydration", "locality", "topology"]):
+        return "scripts/export_workspace_continuity.py"
+    if any(keyword in text for keyword in ["copilot", "continue", "chat"]):
+        return "append_ai_chat_history.py"
+    return "install_workspace_integration.py"
+
+
+def _build_engineering_continuity_state(workspace_root: Path) -> Dict[str, Any]:
+    history_path = workspace_root / ".pecs" / "ai_chat_history.json"
+    entries = _normalize_chat_history_entries(_read_json(history_path, []))
+    if not entries:
+        return {
+            "schema": ENGINEERING_CONTINUITY_SCHEMA,
+            "active_engineering_chains": [],
+            "updated_at": "",
+        }
+
+    chains: Dict[str, Dict[str, Any]] = {}
+    source_counts: Dict[str, int] = {}
+    for entry in entries:
+        source = str(entry.get("source", "") or "unknown").lower()
+        message = str(entry.get("message", "") or "")
+        topic = _infer_engineering_continuity_topic(message)
+        accepted_locality = _infer_engineering_continuity_locality(message)
+
+        chain = chains.setdefault(
+            topic,
+            {
+                "chain_id": f"engineering_continuity:{topic}",
+                "issue": topic.replace("_", " "),
+                "accepted_locality": accepted_locality,
+                "rejected_locality": [],
+                "accepted_followup": False,
+                "continuity_strength": 0.5,
+                "locality_stability": 0.65,
+                "stable_engineering_owner": accepted_locality,
+                "continuity_outcome": "accepted",
+                "continuity_confidence": 0.0,
+                "source_tags": [],
+                "event_count": 0,
+                "source_counts": {},
+            },
+        )
+        chain["event_count"] = int(chain.get("event_count", 0)) + 1
+        chain["source_tags"] = sorted(
+            set(chain.get("source_tags", []) + [source])
+        )
+        chain_source_counts = chain.get("source_counts", {})
+        chain_source_counts[source] = chain_source_counts.get(source, 0) + 1
+        chain["source_counts"] = chain_source_counts
+        chain["accepted_followup"] = chain["event_count"] > 1
+        chain["continuity_strength"] = min(
+            0.9,
+            0.5 + 0.06 * chain["event_count"] + 0.1 * len(chain["source_tags"]),
+        )
+        chain["locality_stability"] = min(
+            0.92, 0.60 + 0.05 * chain["event_count"]
+        )
+        chain["continuity_confidence"] = round(
+            min(1.0, chain["continuity_strength"] + 0.08), 3
+        )
+        if "continue" in source and "copilot" in chain["source_tags"]:
+            chain["continuity_outcome"] = "merged_cross_client_guidance"
+        elif topic == "continuity_hydration":
+            chain["continuity_outcome"] = "hydrated"
+        else:
+            chain["continuity_outcome"] = "accepted"
+
+    chains_list = list(chains.values())
+    chains_list.sort(
+        key=lambda item: (-float(item.get("continuity_confidence", 0.0)), item.get("issue", ""))
+    )
+
+    return {
+        "schema": ENGINEERING_CONTINUITY_SCHEMA,
+        "active_engineering_chains": chains_list,
+        "updated_at": datetime.utcnow().isoformat() + "Z",
+    }
+
+
+def _build_continuity_hydration_report(
+    workspace_root: Path, continuity_state: Dict[str, Any]
+) -> Dict[str, Any]:
+    chains = (
+        continuity_state.get("active_engineering_chains", [])
+        if isinstance(continuity_state, list) or isinstance(
+            continuity_state, dict
+        )
+        else []
+    )
+    source_counts: Dict[str, int] = {}
+    for chain in chains:
+        if not isinstance(chain, dict):
+            continue
+        for source, count in (
+            chain.get("source_counts", {}) if isinstance(chain.get("source_counts", {}), dict) else {}
+        ).items():
+            if not str(source).strip():
+                continue
+            source_counts[str(source)] = source_counts.get(str(source), 0) + int(count)
+
+    return {
+        "schema": CONTINUITY_HYDRATION_REPORT_SCHEMA,
+        "generated_at": datetime.utcnow().isoformat() + "Z",
+        "chain_count": len(chains),
+        "source_counts": source_counts,
+        "merged_client_count": len({source for chain in chains if isinstance(chain, dict) for source in (chain.get("source_tags", []) or [])}),
+        "note": "Structured engineering continuity is derived from accepted workspace AI interaction signals only.",
+    }
 
 
 def _collect_hotspots(
@@ -519,10 +671,29 @@ def export_workspace_continuity(workspace_root: Path) -> Dict[str, Any]:
 
     _write_markdown(continuity_dir / "current_workspace_focus.md", focus_lines)
 
+    engineering_continuity_state = _build_engineering_continuity_state(workspace_root)
+    hydration_report = _build_continuity_hydration_report(
+        workspace_root, engineering_continuity_state
+    )
+    _write_json(
+        continuity_dir / "engineering_continuity_state.json",
+        engineering_continuity_state,
+    )
+    _write_json(
+        continuity_dir / "continuity_hydration_report.json",
+        hydration_report,
+    )
+
     return {
         "continuity_dir": str(continuity_dir),
         "active_topology": str(continuity_dir / "active_topology.json"),
         "locality_state": str(continuity_dir / "locality_state.json"),
+        "engineering_continuity_state": str(
+            continuity_dir / "engineering_continuity_state.json"
+        ),
+        "continuity_hydration_report": str(
+            continuity_dir / "continuity_hydration_report.json"
+        ),
         "architectural_decisions": str(continuity_dir / "architectural_decisions.md"),
         "unresolved_tensions": str(continuity_dir / "unresolved_tensions.md"),
         "current_workspace_focus": str(continuity_dir / "current_workspace_focus.md"),

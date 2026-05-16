@@ -1,0 +1,37 @@
+{
+  "activated_object_details": [],
+  "activated_objects": [],
+  "activation_confidence": {
+    "budget_usage": {
+      "continuity_depth_limit": 4,
+      "discarded_by_budget": 0,
+      "object_limit": 20,
+      "object_used": 0,
+      "token_limit": 1400,
+      "token_used": 0,
+      "zone_limit": 3,
+      "zone_used": 0
+    },
+    "mean_locality_confidence": 0.0,
+    "object_scores": {},
+    "total_score": 0
+  },
+  "activation_diagnostics": {
+    "candidate_count": 0,
+    "discarded_candidates": [],
+    "preferred_zones": [
+      "general_runtime"
+    ],
+    "selected_count": 0,
+    "zone_scores": {}
+  },
+  "activation_reasons": {},
+  "active_locality_clusters": [],
+  "active_runtime_zones": [
+    "general_runtime"
+  ],
+  "active_topology_zone": "general_runtime",
+  "bundle": [],
+  "context_count": 0,
+  "issue_terms": []
+}

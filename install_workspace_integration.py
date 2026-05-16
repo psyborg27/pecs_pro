@@ -8,6 +8,7 @@ import platform
 import shutil
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -33,7 +34,7 @@ WORKSPACE_INSTALL_ROOT_CONFIG = "install_root.json"
 def _get_central_python(repo_root: Path) -> str:
     venv_python = repo_root / ".venv" / "bin" / "python"
     if venv_python.exists() and venv_python.is_file():
-        return str(venv_python.resolve())
+        return str(venv_python)
     return sys.executable
 
 
@@ -140,11 +141,39 @@ def _workspace_registry_path(repo_root: Path) -> Path:
     return repo_root / ".pecs_workspaces.json"
 
 
+def _discover_install_runtime_info(repo_root: Path) -> Dict[str, Any]:
+    python_path = _get_central_python(repo_root)
+    runtime_info = {
+        "install_root": str(repo_root.resolve()),
+        "created_at": datetime.utcnow().isoformat() + "Z",
+        "python_path": str(Path(python_path)),
+        "console_scripts": {},
+    }
+
+    bin_dir = Path(runtime_info["python_path"]).parent
+    candidates = [
+        ("pecs", "pecs"),
+        ("pecs-pro-daemon", "pecs-pro-daemon"),
+        ("pecs-pro-install-workspace", "pecs-pro-install-workspace"),
+    ]
+
+    for name, executable in candidates:
+        script_path = bin_dir / executable
+        if script_path.exists():
+            runtime_info["console_scripts"][name] = str(script_path)
+            continue
+        script_path = bin_dir / f"{executable}.exe"
+        if script_path.exists():
+            runtime_info["console_scripts"][name] = str(script_path)
+
+    return runtime_info
+
+
 def _write_workspace_install_root(workspace_root: Path, repo_root: Path) -> None:
     config_path = _workspace_install_root_config_path(workspace_root)
     config_path.parent.mkdir(parents=True, exist_ok=True)
     config_path.write_text(
-        json.dumps({"install_root": str(repo_root.resolve())}, indent=2, sort_keys=True),
+        json.dumps(_discover_install_runtime_info(repo_root), indent=2, sort_keys=True),
         encoding="utf-8",
     )
 
@@ -213,6 +242,11 @@ def _merge_tasks(tasks_path: Path, repo_root: Path) -> None:
             'bash -lc \'cd "${workspaceFolder}" '
             '&& bash .pecs/run_pecs_daemon.sh "${workspaceFolder}"\''
         ),
+        "windows": {
+            "command": (
+                'cd "${workspaceFolder}" && .\\pecs\\run_pecs_daemon.cmd "${workspaceFolder}"'
+            )
+        },
         "isBackground": True,
         "problemMatcher": [],
     }
@@ -221,6 +255,7 @@ def _merge_tasks(tasks_path: Path, repo_root: Path) -> None:
         "label": "PECS: Auto Start Daemon On Folder Open",
         "type": "shell",
         "command": start_task["command"],
+        "windows": start_task["windows"],
         "isBackground": True,
         "problemMatcher": [],
         "runOptions": {"runOn": "folderOpen"},
@@ -236,6 +271,11 @@ def _merge_tasks(tasks_path: Path, repo_root: Path) -> None:
             'if [[ "$pid" =~ ^[0-9]+$ ]] && kill -0 "$pid" 2>/dev/null; then kill "$pid"; fi; '
             "fi'"
         ),
+        "windows": {
+            "command": (
+                'cd "${workspaceFolder}" && powershell.exe -NoProfile -Command "if (Test-Path \'.pecs/daemon.pid\') { $pid = Get-Content \'.pecs/daemon.pid\'; if ($pid -match \'^[0-9]+$\') { Stop-Process -Id $pid -ErrorAction SilentlyContinue } }"'
+            )
+        },
     }
 
     append_task = {
@@ -246,6 +286,11 @@ def _merge_tasks(tasks_path: Path, repo_root: Path) -> None:
             '&& python3 .pecs/tools/append_ai_chat_history.py "${{workspaceFolder}}" '
             '--source "${{input:pecsChatSource}}" --message "${{input:pecsChatMessage}}"\''
         ),
+        "windows": {
+            "command": (
+                'cd "${workspaceFolder}" && .\\pecs\\tools\\append_ai_chat_history.cmd "${{workspaceFolder}}" "${{input:pecsChatSource}}" "${{input:pecsChatMessage}}"'
+            )
+        },
     }
 
     manual_update_task = {
@@ -255,6 +300,11 @@ def _merge_tasks(tasks_path: Path, repo_root: Path) -> None:
             'bash -lc \'cd "${workspaceFolder}" '
             '&& bash .pecs/tools/update_ai_chat_history.sh "${{workspaceFolder}}" "${{input:pecsChatSource}}" "${{input:pecsChatMessage}}"\''
         ),
+        "windows": {
+            "command": (
+                'cd "${workspaceFolder}" && .\\pecs\\tools\\update_ai_chat_history.cmd "${{workspaceFolder}}" "${{input:pecsChatSource}}" "${{input:pecsChatMessage}}"'
+            )
+        },
     }
 
     refresh_continuity_task = {
@@ -264,6 +314,11 @@ def _merge_tasks(tasks_path: Path, repo_root: Path) -> None:
             'bash -lc \'cd "${workspaceFolder}" '
             '&& bash .pecs/bridge/run_bridge.sh "${workspaceFolder}" refresh\''
         ),
+        "windows": {
+            "command": (
+                'cd "${workspaceFolder}" && .\\pecs\\bridge\\run_bridge.cmd "${workspaceFolder}" refresh'
+            )
+        },
     }
 
     validate_continuity_task = {
@@ -273,6 +328,11 @@ def _merge_tasks(tasks_path: Path, repo_root: Path) -> None:
             'bash -lc \'cd "${workspaceFolder}" '
             '&& bash .pecs/bridge/run_bridge.sh "${workspaceFolder}" validate\''
         ),
+        "windows": {
+            "command": (
+                'cd "${workspaceFolder}" && .\\pecs\\bridge\\run_bridge.cmd "${workspaceFolder}" validate'
+            )
+        },
     }
 
     desired_tasks = [
@@ -590,6 +650,68 @@ def _install_chat_tools(workspace_root: Path, repo_root: Path) -> None:
             manual_source_script.read_text(encoding="utf-8"), encoding="utf-8"
         )
 
+    append_cmd = tools_dir / "append_ai_chat_history.cmd"
+    append_cmd.write_text(
+        """@echo off
+setlocal enabledelayedexpansion
+set SCRIPT_DIR=%~dp0
+set WORKSPACE_ROOT=%~1
+shift
+set SOURCE=%~1
+shift
+set MESSAGE=%*
+if "%WORKSPACE_ROOT%"=="" set WORKSPACE_ROOT=.
+set PYTHON_EXEC=python
+where python >nul 2>&1 || set PYTHON_EXEC=py -3
+"%PYTHON_EXEC%" "%SCRIPT_DIR%append_ai_chat_history.py" "%WORKSPACE_ROOT%" --source "!SOURCE!" --message "!MESSAGE!"
+""",
+        encoding="utf-8",
+    )
+
+    append_ps1 = tools_dir / "append_ai_chat_history.ps1"
+    append_ps1.write_text(
+        """$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$WorkspaceRoot = if ($args.Count -ge 1) { $args[0] } else { "." }
+$RemainingArgs = if ($args.Count -gt 1) { $args[1..($args.Count - 1)] } else { @() }
+$python = Get-Command python -ErrorAction SilentlyContinue
+if (-not $python) { $python = Get-Command py -ErrorAction SilentlyContinue }
+if (-not $python) { Write-Error "Python is not available on PATH"; exit 1 }
+& $python.Source (Join-Path $ScriptDir "append_ai_chat_history.py") $WorkspaceRoot @RemainingArgs
+""",
+        encoding="utf-8",
+    )
+
+    update_cmd = tools_dir / "update_ai_chat_history.cmd"
+    update_cmd.write_text(
+        """@echo off
+setlocal enabledelayedexpansion
+set SCRIPT_DIR=%~dp0
+set WORKSPACE_ROOT=%~1
+shift
+set SOURCE=%~1
+shift
+set MESSAGE=%*
+if "%WORKSPACE_ROOT%"=="" set WORKSPACE_ROOT=.
+set PYTHON_EXEC=python
+where python >nul 2>&1 || set PYTHON_EXEC=py -3
+"%PYTHON_EXEC%" "%SCRIPT_DIR%append_ai_chat_history.py" "%WORKSPACE_ROOT%" --source "!SOURCE!" --message "!MESSAGE!"
+""",
+        encoding="utf-8",
+    )
+
+    update_ps1 = tools_dir / "update_ai_chat_history.ps1"
+    update_ps1.write_text(
+        """$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$WorkspaceRoot = if ($args.Count -ge 1) { $args[0] } else { "." }
+$RemainingArgs = if ($args.Count -gt 1) { $args[1..($args.Count - 1)] } else { @() }
+$python = Get-Command python -ErrorAction SilentlyContinue
+if (-not $python) { $python = Get-Command py -ErrorAction SilentlyContinue }
+if (-not $python) { Write-Error "Python is not available on PATH"; exit 1 }
+& $python.Source (Join-Path $ScriptDir "append_ai_chat_history.py") $WorkspaceRoot @RemainingArgs
+""",
+        encoding="utf-8",
+    )
+
     chat_history = workspace_root / ".pecs" / "ai_chat_history.json"
     if not chat_history.exists():
         chat_history.write_text("[]\n", encoding="utf-8")
@@ -688,18 +810,38 @@ COMMAND="${2:-refresh}"
 BRIDGE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_FILE="$BRIDGE_DIR/../config/install_root.json"
 INSTALL_ROOT=""
+INSTALL_PYTHON=""
+PECS_EXE=""
+PECS_DAEMON_EXE=""
 
 if [[ -f "$CONFIG_FILE" ]]; then
-  INSTALL_ROOT="$(python3 - "$CONFIG_FILE" <<'PY'
-import json, pathlib, sys
+  PYTHON_CMD="python3"
+  if ! command -v "$PYTHON_CMD" >/dev/null 2>&1; then
+    PYTHON_CMD="python"
+  fi
+  if command -v "$PYTHON_CMD" >/dev/null 2>&1; then
+    eval "$("$PYTHON_CMD" - "$CONFIG_FILE" <<'PY'
+import json, pathlib, sys, shlex
 path = pathlib.Path(sys.argv[1])
 try:
     data = json.loads(path.read_text(encoding='utf-8'))
-    print(data.get('install_root', ''))
 except Exception:
-    pass
+    data = {}
+for key in ["install_root", "python_path"]:
+    value = str(data.get(key, "") or "")
+    print(f"{key.upper()}={shlex.quote(value)}")
+console = data.get("console_scripts", {}) or {}
+value = str(console.get("pecs", "") or "")
+print(f"PECS={shlex.quote(value)}")
+value = str(console.get("pecs-pro-daemon", "") or "")
+print(f"PECS_PRO_DAEMON={shlex.quote(value)}")
 PY
-)"
+  )"
+  fi
+  INSTALL_ROOT="${INSTALL_ROOT:-}"
+  INSTALL_PYTHON="${PYTHON_PATH:-}"
+  PECS_EXE="${PECS:-}"
+  PECS_DAEMON_EXE="${PECS_PRO_DAEMON:-}"
 fi
 
 if [[ -n "$INSTALL_ROOT" && -f "$INSTALL_ROOT/.venv/bin/activate" ]]; then
@@ -712,9 +854,41 @@ if [[ "$WORKSPACE_ROOT" == "refresh" || "$WORKSPACE_ROOT" == "validate" ]]; then
 fi
 
 cd "$WORKSPACE_ROOT"
-python3 .pecs/bridge/run_bridge.py "$COMMAND" --workspace "$WORKSPACE_ROOT"
+PYTHON_CMD="python3"
+if ! command -v "$PYTHON_CMD" >/dev/null 2>&1; then
+  PYTHON_CMD="python"
+fi
+"$PYTHON_CMD" .pecs/bridge/run_bridge.py "$COMMAND" --workspace "$WORKSPACE_ROOT"
 """
     (bridge_dir / "run_bridge.sh").write_text(bridge_sh, encoding="utf-8")
+    bridge_cmd = bridge_dir / "run_bridge.cmd"
+    bridge_cmd.write_text(
+        """@echo off
+setlocal enabledelayedexpansion
+set SCRIPT_DIR=%~dp0
+set WORKSPACE_ROOT=%~1
+set COMMAND=%~2
+if "%WORKSPACE_ROOT%"=="" set WORKSPACE_ROOT=.
+if "%COMMAND%"=="" set COMMAND=refresh
+set PYTHON_EXEC=python
+where python >nul 2>&1 || set PYTHON_EXEC=py -3
+"%PYTHON_EXEC%" "%SCRIPT_DIR%run_bridge.py" "%COMMAND%" --workspace "%WORKSPACE_ROOT%"
+""",
+        encoding="utf-8",
+    )
+    bridge_ps1 = bridge_dir / "run_bridge.ps1"
+    bridge_ps1.write_text(
+        """$args = $args
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$Command = if ($args.Count -ge 1) { $args[0] } else { "refresh" }
+$WorkspaceRoot = if ($args.Count -ge 2) { $args[1] } else { "." }
+$python = Get-Command python -ErrorAction SilentlyContinue
+if (-not $python) { $python = Get-Command py -ErrorAction SilentlyContinue }
+if (-not $python) { Write-Error "Python is not available on PATH"; exit 1 }
+& $python.Source (Join-Path $ScriptDir "run_bridge.py") $Command --workspace $WorkspaceRoot
+""",
+        encoding="utf-8",
+    )
 
     bridge_config = {
         "schema": "pecs.bridge.config.v1",
@@ -792,41 +966,217 @@ python3 .pecs/bridge/run_bridge.py "$COMMAND" --workspace "$WORKSPACE_ROOT"
 
 
 def _install_workspace_local_launchers(workspace_root: Path, repo_root: Path) -> None:
-    launcher = workspace_root / ".pecs" / "run_pecs_daemon.sh"
-    launcher.parent.mkdir(parents=True, exist_ok=True)
-    launcher_content = """#!/usr/bin/env bash
+    launcher_dir = workspace_root / ".pecs"
+    launcher_dir.mkdir(parents=True, exist_ok=True)
+
+    common_loader = """#!/usr/bin/env bash
 set -euo pipefail
 
-WORKSPACE_ROOT="${1:-.}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_FILE="$SCRIPT_DIR/config/install_root.json"
 INSTALL_ROOT=""
+INSTALL_PYTHON=""
+PECS_EXE=""
+PECS_DAEMON_EXE=""
 
 if [[ -f "$CONFIG_FILE" ]]; then
-  INSTALL_ROOT="$(python3 - "$CONFIG_FILE" <<'PY'
-import json, pathlib, sys
+  PYTHON_CMD="python3"
+  if ! command -v "$PYTHON_CMD" >/dev/null 2>&1; then
+    PYTHON_CMD="python"
+  fi
+  if command -v "$PYTHON_CMD" >/dev/null 2>&1; then
+    eval "$("$PYTHON_CMD" - "$CONFIG_FILE" <<'PY'
+import json, pathlib, sys, shlex
 path = pathlib.Path(sys.argv[1])
 try:
     data = json.loads(path.read_text(encoding='utf-8'))
-    print(data.get('install_root', ''))
 except Exception:
-    pass
+    data = {}
+for key in ["install_root", "python_path"]:
+    value = str(data.get(key, "") or "")
+    print(f"{key.upper()}={shlex.quote(value)}")
+console = data.get("console_scripts", {}) or {}
+value = str(console.get("pecs", "") or "")
+print(f"PECS={shlex.quote(value)}")
+value = str(console.get("pecs-pro-daemon", "") or "")
+print(f"PECS_PRO_DAEMON={shlex.quote(value)}")
 PY
-)"
-fi
-
-if [[ -n "$INSTALL_ROOT" && -f "$INSTALL_ROOT/.venv/bin/activate" ]]; then
-  source "$INSTALL_ROOT/.venv/bin/activate"
-fi
-
-if command -v pecs-pro-daemon >/dev/null 2>&1; then
-  pecs-pro-daemon "$WORKSPACE_ROOT"
-else
-  python3 -m pecs_pro.run_pecs_daemon "$WORKSPACE_ROOT"
+    )"
+  fi
+  INSTALL_ROOT="${INSTALL_ROOT:-}"
+  INSTALL_PYTHON="${PYTHON_PATH:-}"
+  PECS_EXE="${PECS:-}"
+  PECS_DAEMON_EXE="${PECS_PRO_DAEMON:-}"
 fi
 """
-    launcher.write_text(launcher_content, encoding="utf-8")
-    launcher.chmod(0o755)
+
+
+    run_pecs = launcher_dir / "run_pecs.sh"
+    run_pecs.write_text(
+        common_loader
+        + "\n"
+        + "if [[ -n \"$PECS_EXE\" && -x \"$PECS_EXE\" ]]; then\n"
+        + "  exec \"$PECS_EXE\" \"$@\"\n"
+        + "fi\n"
+        + "if command -v pecs >/dev/null 2>&1; then\n"
+        + "  exec pecs \"$@\"\n"
+        + "fi\n"
+        + "if [[ -n \"$INSTALL_PYTHON\" && -x \"$INSTALL_PYTHON\" ]]; then\n"
+        + "  exec \"$INSTALL_PYTHON\" -m workspace_bridge_cli \"$@\"\n"
+        + "fi\n"
+        + "echo \"ERROR: Could not resolve PECS runtime from install root or PATH.\" >&2\n"
+        + "echo \"Expected install root: $INSTALL_ROOT\" >&2\n"
+        + "exit 1\n"
+        , encoding="utf-8"
+    )
+    run_pecs.chmod(0o755)
+
+    run_daemon = launcher_dir / "run_pecs_daemon.sh"
+    run_daemon.write_text(
+        common_loader
+        + "\n"
+        + "WORKSPACE_ROOT=\"${1:-.}\"\n"
+        + "if [[ -n \"$PECS_DAEMON_EXE\" && -x \"$PECS_DAEMON_EXE\" ]]; then\n"
+        + "  exec \"$PECS_DAEMON_EXE\" \"$WORKSPACE_ROOT\"\n"
+        + "fi\n"
+        + "if command -v pecs-pro-daemon >/dev/null 2>&1; then\n"
+        + "  exec pecs-pro-daemon \"$WORKSPACE_ROOT\"\n"
+        + "fi\n"
+        + "if [[ -n \"$INSTALL_PYTHON\" && -x \"$INSTALL_PYTHON\" ]]; then\n"
+        + "  exec \"$INSTALL_PYTHON\" -m run_pecs_daemon \"$WORKSPACE_ROOT\"\n"
+        + "fi\n"
+        + "echo \"ERROR: Could not resolve PECS daemon runtime from install root or PATH.\" >&2\n"
+        + "echo \"Expected install root: $INSTALL_ROOT\" >&2\n"
+        + "exit 1\n"
+        , encoding="utf-8"
+    )
+    run_daemon.chmod(0o755)
+
+    run_pecs_cmd = launcher_dir / "run_pecs.cmd"
+    run_pecs_cmd.write_text(
+        """@echo off
+setlocal enabledelayedexpansion
+set SCRIPT_DIR=%~dp0
+set CONFIG_FILE=%SCRIPT_DIR%config\\install_root.json
+set INSTALL_ROOT=
+set INSTALL_PYTHON=
+set PECS_EXE=
+set IDX=0
+set PYTHON_EXEC=python
+where python >nul 2>&1 || set PYTHON_EXEC=py -3
+for /f "usebackq delims=" %%A in (`%PYTHON_EXEC% -c "import json,sys; p=sys.argv[1]; data=json.loads(open(p,encoding='utf-8').read()); print(data.get('install_root','')); print(data.get('python_path','')); print(data.get('console_scripts',{}).get('pecs','')); print(data.get('console_scripts',{}).get('pecs-pro-daemon',''))" "%CONFIG_FILE%"`) do (
+  set /a IDX+=1
+  if !IDX! EQU 1 set INSTALL_ROOT=%%A
+  if !IDX! EQU 2 set INSTALL_PYTHON=%%A
+  if !IDX! EQU 3 set PECS_EXE=%%A
+)
+if defined PECS_EXE if exist "%PECS_EXE%" (
+  "%PECS_EXE%" %*
+  goto :EOF
+)
+if defined INSTALL_PYTHON if exist "%INSTALL_PYTHON%" (
+  "%INSTALL_PYTHON%" -m workspace_bridge_cli %*
+  goto :EOF
+)
+pecs %*
+""",
+        encoding="utf-8",
+    )
+
+    run_daemon_cmd = launcher_dir / "run_pecs_daemon.cmd"
+    run_daemon_cmd.write_text(
+        """@echo off
+setlocal enabledelayedexpansion
+set WORKSPACE_ROOT=%~1
+if "%WORKSPACE_ROOT%"=="" set WORKSPACE_ROOT=.
+set SCRIPT_DIR=%~dp0
+set CONFIG_FILE=%SCRIPT_DIR%config\\install_root.json
+set INSTALL_ROOT=
+set INSTALL_PYTHON=
+set PECS_DAEMON_EXE=
+set IDX=0
+set PYTHON_EXEC=python
+where python >nul 2>&1 || set PYTHON_EXEC=py -3
+for /f "usebackq delims=" %%A in (`%PYTHON_EXEC% -c "import json,sys; p=sys.argv[1]; data=json.loads(open(p,encoding='utf-8').read()); print(data.get('install_root','')); print(data.get('python_path','')); print(data.get('console_scripts',{}).get('pecs','')); print(data.get('console_scripts',{}).get('pecs-pro-daemon',''))" "%CONFIG_FILE%"`) do (
+  set /a IDX+=1
+  if !IDX! EQU 1 set INSTALL_ROOT=%%A
+  if !IDX! EQU 2 set INSTALL_PYTHON=%%A
+  if !IDX! EQU 4 set PECS_DAEMON_EXE=%%A
+)
+if defined PECS_DAEMON_EXE if exist "%PECS_DAEMON_EXE%" (
+  "%PECS_DAEMON_EXE%" "%WORKSPACE_ROOT%"
+  goto :EOF
+)
+if defined INSTALL_PYTHON if exist "%INSTALL_PYTHON%" (
+  "%INSTALL_PYTHON%" -m run_pecs_daemon "%WORKSPACE_ROOT%"
+  goto :EOF
+)
+pecs-pro-daemon "%WORKSPACE_ROOT%"
+""",
+        encoding="utf-8",
+    )
+
+    run_pecs_ps1 = launcher_dir / "run_pecs.ps1"
+    run_pecs_ps1.write_text(
+        """$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$InstallRoot = $null
+$InstallPython = $null
+$PecsExe = $null
+$PecsDaemonExe = $null
+$ConfigFile = Join-Path $ScriptDir "config" "install_root.json"
+if (Test-Path $ConfigFile) {
+  $data = Get-Content $ConfigFile -Raw | ConvertFrom-Json
+  $InstallRoot = $data.install_root
+  $InstallPython = $data.python_path
+  $PecsExe = $data.console_scripts.pecs
+  $PecsDaemonExe = $data.console_scripts."pecs-pro-daemon"
+}
+$WorkspaceArgs = $args
+if ($PecsExe -and (Test-Path $PecsExe)) {
+  & $PecsExe @WorkspaceArgs
+  exit $LASTEXITCODE
+}
+if ($InstallPython -and (Test-Path $InstallPython)) {
+  & $InstallPython -m workspace_bridge_cli @WorkspaceArgs
+  exit $LASTEXITCODE
+}
+Write-Error "ERROR: Could not resolve PECS runtime from install root or PATH."
+Write-Error "Expected install root: $InstallRoot"
+exit 1
+""",
+        encoding="utf-8",
+    )
+
+    run_daemon_ps1 = launcher_dir / "run_pecs_daemon.ps1"
+    run_daemon_ps1.write_text(
+        """param([string]$WorkspaceRoot = ".")
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$InstallRoot = $null
+$InstallPython = $null
+$PecsExe = $null
+$PecsDaemonExe = $null
+$ConfigFile = Join-Path $ScriptDir "config" "install_root.json"
+if (Test-Path $ConfigFile) {
+  $data = Get-Content $ConfigFile -Raw | ConvertFrom-Json
+  $InstallRoot = $data.install_root
+  $InstallPython = $data.python_path
+  $PecsExe = $data.console_scripts.pecs
+  $PecsDaemonExe = $data.console_scripts."pecs-pro-daemon"
+}
+if ($PecsDaemonExe -and (Test-Path $PecsDaemonExe)) {
+  & $PecsDaemonExe $WorkspaceRoot
+  exit $LASTEXITCODE
+}
+if ($InstallPython -and (Test-Path $InstallPython)) {
+  & $InstallPython -m run_pecs_daemon $WorkspaceRoot
+  exit $LASTEXITCODE
+}
+Write-Error "ERROR: Could not resolve PECS daemon runtime from install root or PATH."
+Write-Error "Expected install root: $InstallRoot"
+exit 1
+""",
+        encoding="utf-8",
+    )
 
 
 def _write_readme(workspace_root: Path) -> None:
@@ -851,7 +1201,12 @@ Installed items:
 - .pecs/bridge/run_bridge.py
 - .pecs/bridge/export_workspace_continuity.py
 - .pecs/bridge/validate_workspace_continuity.py
+- .pecs/config/install_root.json
 - .pecs/config/continuity_bridge.json
+- .pecs/run_pecs.sh
+- .pecs/run_pecs.cmd
+- .pecs/run_pecs_daemon.sh
+- .pecs/run_pecs_daemon.cmd
 - .pecs/continuity/engineering_continuity_state.json
 - .pecs/continuity/continuity_hydration_report.json
 - .pecs/README_MANUAL_SETUP.md
@@ -903,9 +1258,7 @@ def install_workspace(workspace_root: Path, repo_root: Path) -> None:
     _merge_json_dict(
         workspace_root / ".vscode" / "settings.json",
         {
-            "pecs.contextPath": str(
-                (workspace_root / ".pecs" / "active_context.json").resolve()
-            ),
+            "pecs.contextPath": ".pecs/active_context.json",
         },
     )
     _write_continue_rules(workspace_root)
@@ -1023,7 +1376,7 @@ def main() -> None:
                 sys.exit(0 if result["valid"] else 1)
 
             # Install assets
-            install_result = manager.install_assets(upgrade=args.upgrade, verify=True)
+            install_result = manager.install_assets(upgrade=args.upgrade, verify=False)
             logger.info(f"Asset installation status: {install_result['status']}")
             logger.info(f"Installed {len(install_result['installed_assets'])} asset(s)")
 

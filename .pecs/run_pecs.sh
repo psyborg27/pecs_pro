@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-WORKSPACE_ROOT="${1:-.}"
-COMMAND="${2:-refresh}"
-BRIDGE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CONFIG_FILE="$BRIDGE_DIR/../config/install_root.json"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONFIG_FILE="$SCRIPT_DIR/config/install_root.json"
 INSTALL_ROOT=""
 INSTALL_PYTHON=""
 PECS_EXE=""
@@ -32,7 +30,7 @@ print(f"PECS={shlex.quote(value)}")
 value = str(console.get("pecs-pro-daemon", "") or "")
 print(f"PECS_PRO_DAEMON={shlex.quote(value)}")
 PY
-  )"
+    )"
   fi
   INSTALL_ROOT="${INSTALL_ROOT:-}"
   INSTALL_PYTHON="${PYTHON_PATH:-}"
@@ -40,18 +38,15 @@ PY
   PECS_DAEMON_EXE="${PECS_PRO_DAEMON:-}"
 fi
 
-if [[ -n "$INSTALL_ROOT" && -f "$INSTALL_ROOT/.venv/bin/activate" ]]; then
-  source "$INSTALL_ROOT/.venv/bin/activate"
+if [[ -n "$PECS_EXE" && -x "$PECS_EXE" ]]; then
+  exec "$PECS_EXE" "$@"
 fi
-
-if [[ "$WORKSPACE_ROOT" == "refresh" || "$WORKSPACE_ROOT" == "validate" ]]; then
-    COMMAND="$WORKSPACE_ROOT"
-    WORKSPACE_ROOT="$(pwd)"
+if command -v pecs >/dev/null 2>&1; then
+  exec pecs "$@"
 fi
-
-cd "$WORKSPACE_ROOT"
-PYTHON_CMD="python3"
-if ! command -v "$PYTHON_CMD" >/dev/null 2>&1; then
-  PYTHON_CMD="python"
+if [[ -n "$INSTALL_PYTHON" && -x "$INSTALL_PYTHON" ]]; then
+  exec "$INSTALL_PYTHON" -m workspace_bridge_cli "$@"
 fi
-"$PYTHON_CMD" .pecs/bridge/run_bridge.py "$COMMAND" --workspace "$WORKSPACE_ROOT"
+echo "ERROR: Could not resolve PECS runtime from install root or PATH." >&2
+echo "Expected install root: $INSTALL_ROOT" >&2
+exit 1

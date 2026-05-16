@@ -230,6 +230,7 @@ Each workspace keeps its own `.pecs` integration and daemon, while the runtime i
 - Workspace-local integration and launcher bridges
 - Daemon-per-workspace continuity monitoring
 - Install-root binding via `.pecs/config/install_root.json`
+- Workspace-local launchers in `.pecs/run_pecs.*` and `.pecs/run_pecs_daemon.*`
 
 ## Self-Hosting Guidance
 

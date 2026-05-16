@@ -1,0 +1,23 @@
+{
+  "activated_objects": [],
+  "activation_confidence": {
+    "budget_usage": {
+      "continuity_depth_limit": 4,
+      "discarded_by_budget": 0,
+      "object_limit": 20,
+      "object_used": 0,
+      "token_limit": 1400,
+      "token_used": 0,
+      "zone_limit": 3,
+      "zone_used": 0
+    },
+    "mean_locality_confidence": 0.0,
+    "object_scores": {},
+    "total_score": 0
+  },
+  "active_runtime_zones": [
+    "general_runtime"
+  ],
+  "runtime_edges": [],
+  "workspace_root": "/Users/raj/Developer/PECS/status"
+}

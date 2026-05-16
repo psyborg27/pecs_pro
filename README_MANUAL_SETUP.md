@@ -201,3 +201,20 @@ Chat-history replay is optional and experimental.
 ## What automatic installation does
 
 If you use `pecs-pro-install-workspace`, it installs all of the above for you and also creates the PECS tasks in `.vscode/tasks.json`.
+
+## Workspace launchers
+
+The workspace integration also generates install-root-aware workspace launchers in `.pecs/`:
+
+- `.pecs/run_pecs.sh`
+- `.pecs/run_pecs.cmd`
+- `.pecs/run_pecs_daemon.sh`
+- `.pecs/run_pecs_daemon.cmd`
+- `.pecs/config/install_root.json`
+
+These wrappers resolve the correct PECS install root and runtime explicitly, so commands still work even when the active shell is using a different workspace venv.
+
+- `.pecs/run_pecs_daemon.cmd`
+- `.pecs/config/install_root.json`
+
+These wrappers resolve the correct PECS install root and runtime explicitly, so commands still work even when the active shell is using a different workspace venv.

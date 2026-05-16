@@ -23,11 +23,18 @@ EXPECTED_JSON_REQUIRED_KEYS = {
         "schema",
         "validation_metrics",
     },
+    "engineering_continuity_state.json": {
+        "schema",
+        "active_engineering_chains",
+        "updated_at",
+    },
 }
 
 MAX_FILE_SIZES = {
     "active_topology.json": 16_000,
     "locality_state.json": 24_000,
+    "engineering_continuity_state.json": 20_000,
+    "continuity_hydration_report.json": 10_000,
     "architectural_decisions.md": 4_000,
     "current_workspace_focus.md": 8_000,
     "unresolved_tensions.md": 4_000,

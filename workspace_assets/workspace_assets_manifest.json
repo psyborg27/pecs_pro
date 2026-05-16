@@ -148,7 +148,15 @@
     "required_daemon_files": [
       ".pecs/bridge/run_bridge.py",
       ".pecs/bridge/run_bridge.sh",
+      ".pecs/bridge/run_bridge.cmd",
+      ".pecs/bridge/run_bridge.ps1",
+      ".pecs/run_pecs.sh",
+      ".pecs/run_pecs.cmd",
+      ".pecs/run_pecs.ps1",
       ".pecs/run_pecs_daemon.sh",
+      ".pecs/run_pecs_daemon.cmd",
+      ".pecs/run_pecs_daemon.ps1",
+      ".pecs/config/install_root.json",
       ".pecs/config/continuity_bridge.json"
     ],
     "required_daemon_directories": [
